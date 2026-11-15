@@ -6,6 +6,7 @@ import os
 from PySide6.QtCore import QObject, QRect, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 
+from ..ai.services import AiServices
 from ..services.persistence import Database
 from ..ui.markdown_window import DEFAULT_SIZE, MarkdownWindow
 from ..utils.geometry import clamp_to_screens
@@ -26,6 +27,7 @@ class WindowManager(QObject):
                  parent: QObject | None = None):
         super().__init__(parent)
         self._files, self._db, self._settings = files, db, settings
+        self.ai = AiServices(settings)
         self._windows: dict[str, MarkdownWindow] = {}
         self._quitting = False
         self._save_timer = QTimer(self, singleShot=True, interval=SAVE_DEBOUNCE_MS)
@@ -69,6 +71,7 @@ class WindowManager(QObject):
         opacity = saved.get("opacity") or self._settings.get("opacity")
         compact = bool(saved.get("compact", self._settings.get("compact_default")))
         win = MarkdownWindow(key, path, theme, opacity, False)
+        win.set_ai_services(self.ai)
         self._apply_geometry(win, saved)
         if compact:
             win.set_compact(True)

@@ -18,6 +18,10 @@ DEFAULTS: dict[str, Any] = {
     "restore_windows": False,             # reopen last session's windows on startup
     "last_dir": "",
     "show_home": True,                    # show the home screen on startup
+    "ai_save_dir": "",                    # where AI-created files go ("" = ~/Documents/MarkdownCompanion)
+    "ai_history": [],                     # recent AI-edit instructions, newest first
+    "animations": True,                   # typing cat, diff reveal
+    "groq_api_key": "",                   # only used when the OS keychain is unavailable
 }
 
 
@@ -25,7 +29,14 @@ def _valid_opacity(v: Any) -> float:
     return min(1.0, max(0.3, float(v)))
 
 
+def _valid_history(v: Any) -> list[str]:
+    if not isinstance(v, list):
+        raise ValueError("history must be a list")
+    return [str(x) for x in v if isinstance(x, str)][:8]
+
+
 _VALIDATORS = {
+    "ai_save_dir": str, "groq_api_key": str, "animations": bool, "ai_history": _valid_history,
     "opacity": _valid_opacity,
     "compact_default": bool,
     "show_home": bool,

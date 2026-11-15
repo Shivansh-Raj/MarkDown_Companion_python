@@ -7,6 +7,7 @@ from PySide6.QtCore import QPoint, QTimer, Qt, Signal
 from PySide6.QtGui import QCursor, QKeySequence, QMouseEvent, QShortcut
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
+from ..ai.edit import locate_selection, utf16_to_index
 from ..markdown.renderer import render_markdown
 from ..services.synchronization import ToggleStatus
 from .markdown_view import create_view
@@ -42,6 +43,13 @@ class MarkdownWindow(QWidget):
         self._confirm_discard = False
         self._pending_text: str | None = None   # newer disk content queued while editing
         self._expanded_h = DEFAULT_SIZE[1]
+        self._source = ""                        # latest file text shown (for AI edit)
+        self._ext_version = 0                    # bumped whenever the file changes underneath us
+        self._ai_services = None
+        self.ai_panel = None
+        self._ai_open = False
+        self._ai_pending: str | None = None      # AI result waiting for edit mode to start
+        self._ai_undo: list[str] = []
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
@@ -77,8 +85,13 @@ class MarkdownWindow(QWidget):
         self.cancel_btn = QPushButton("CANCEL")
         hint = QLabel("Editing source \u00b7 Ctrl+S saves \u00b7 Esc cancels")
         hint.setObjectName("hint")
+        self.undo_ai_btn = QPushButton("UNDO AI")
+        self.undo_ai_btn.setToolTip("Undo the last AI edit")
+        self.undo_ai_btn.setEnabled(False)
+        self.undo_ai_btn.clicked.connect(self.undo_ai)
         eb.addWidget(self.save_btn)
         eb.addWidget(self.cancel_btn)
+        eb.addWidget(self.undo_ai_btn)
         eb.addWidget(hint, 1)
         self.editbar.hide()
         self.editor = QPlainTextEdit()
@@ -96,6 +109,7 @@ class MarkdownWindow(QWidget):
         self._status_timer.timeout.connect(self.clear_status)
         self.title_bar.close_clicked.connect(self._request_close)
         self.title_bar.edit_clicked.connect(lambda: self.edit_requested.emit(self.key))
+        self.title_bar.ai_clicked.connect(self.open_ai)
         self.save_btn.clicked.connect(self.request_save)
         self.cancel_btn.clicked.connect(self.cancel_edit)
         self.title_bar.minimize_clicked.connect(self.showMinimized)
@@ -118,9 +132,14 @@ class MarkdownWindow(QWidget):
 
     # content -------------------------------------------------------------------
     def load_markdown(self, text: str) -> None:
+        self._source = text.lstrip("\ufeff")
         self.view.set_content(render_markdown(text), self.theme, os.path.dirname(self.path))
 
     def update_markdown(self, text: str) -> None:
+        self._source = text.lstrip("\ufeff")
+        self._ext_version += 1
+        if self.ai_panel is not None:
+            self.ai_panel.note_external_change(self._ext_version)
         if self._editing:           # never disturb the editor; show the newest version afterwards
             self._pending_text = text
             return
@@ -171,6 +190,7 @@ class MarkdownWindow(QWidget):
         self.editor.setPlainText(text.lstrip("\ufeff"))
         self._draft0 = self.editor.toPlainText()
         self._editing = True
+        self._ai_undo = []
         self.clear_status()
         self.view.hide()
         self.editbar.show()
@@ -178,9 +198,16 @@ class MarkdownWindow(QWidget):
         self.cancel_btn.setText("CANCEL")
         self.title_bar.set_editing(True)
         self.editor.setFocus()
+        if self._ai_pending is not None:          # an AI result was waiting for edit mode
+            pending, self._ai_pending = self._ai_pending, None
+            self._ai_undo = [self.editor.toPlainText()]
+            self.editor.setPlainText(pending)
+        self._update_undo_ai()
 
     def exit_edit(self) -> None:
         self._editing = False
+        self._ai_undo = []
+        self._update_undo_ai()
         self._close_armed = False
         self._confirm_discard = False
         self.editor.hide()
@@ -226,6 +253,84 @@ class MarkdownWindow(QWidget):
             self.show_status(result.message, "error", persistent=True)
         else:
             self.show_status(result.message, "error", persistent=True)
+
+    # AI edit -----------------------------------------------------------------------------------
+    def set_ai_services(self, ai) -> None:
+        from .ai_edit_panel import AiEditPanel
+        self._ai_services = ai
+        self.ai_panel = AiEditPanel(ai, self)
+        self.ai_panel.hide()
+        self.ai_panel.applied.connect(self._on_ai_applied)
+        self.ai_panel.closed.connect(self.close_ai)
+        self.frame.layout().insertWidget(self.frame.layout().indexOf(self.view), self.ai_panel, 1)
+        QShortcut(QKeySequence("Escape"), self.ai_panel, activated=self._ai_escape,
+                  context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
+
+    def _ai_escape(self) -> None:
+        panel = self.ai_panel
+        if panel.stack.currentIndex() == 1:
+            panel.stop()
+        elif panel.stack.currentIndex() == 2:
+            panel.stack.setCurrentIndex(0)
+        else:
+            panel.close_panel()
+
+    def open_ai(self) -> None:
+        if self.ai_panel is None or self._ai_open or not self._available:
+            return
+        if self._compact:
+            self.set_compact(False)
+        if self._editing:
+            source = self.editor.toPlainText()
+            cur = self.editor.textCursor()
+            selection = None
+            if cur.hasSelection():
+                a = utf16_to_index(source, cur.selectionStart())
+                b = utf16_to_index(source, cur.selectionEnd())
+                if source[a:b].strip():
+                    selection = (a, b)
+        else:
+            source = self._source
+            selection = locate_selection(source, self.view.selected_text())
+        self.ai_panel.open_for(source, selection, self._ext_version)
+        self._set_ai_open(True)
+
+    def _set_ai_open(self, on: bool) -> None:
+        self._ai_open = on
+        self.ai_panel.setVisible(on)
+        if on:
+            self.view.hide()
+            self.editor.hide()
+            self.editbar.hide()
+        elif self._editing:
+            self.editbar.show()
+            self.editor.show()
+            self.editor.setFocus()
+        else:
+            self.view.setVisible(not self._compact)
+
+    def close_ai(self) -> None:
+        if self._ai_open:
+            self._set_ai_open(False)
+
+    def _on_ai_applied(self, text: str) -> None:
+        self._set_ai_open(False)
+        if self._editing:
+            self._ai_undo.append(self.editor.toPlainText())
+            self.editor.setPlainText(text)
+        else:
+            self._ai_pending = text
+            self.edit_requested.emit(self.key)      # starts edit mode, which then loads the pending text
+            self._ai_pending = None                 # (cleared here if edit mode could not start)
+        self._update_undo_ai()
+
+    def undo_ai(self) -> None:
+        if self._ai_undo:
+            self.editor.setPlainText(self._ai_undo.pop())
+        self._update_undo_ai()
+
+    def _update_undo_ai(self) -> None:
+        self.undo_ai_btn.setEnabled(bool(self._ai_undo))
 
     def _request_close(self) -> None:
         if self.is_dirty() and not getattr(self, "_close_armed", False):
@@ -351,5 +456,7 @@ class MarkdownWindow(QWidget):
             e.accept()
 
     def force_close(self) -> None:
+        if self.ai_panel is not None:
+            self.ai_panel.cancel_worker()
         self._closing = True
         self.close()

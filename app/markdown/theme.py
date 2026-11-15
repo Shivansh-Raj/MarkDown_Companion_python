@@ -82,6 +82,8 @@ QWidget#editbar { background: %(bg_alt)s; border-bottom: 2px solid %(border)s; }
 QWidget#editbar QPushButton { padding: 2px 10px; font-weight: bold; }
 QPlainTextEdit#editor { background: %(code_bg)s; color: %(fg)s; border: 0; padding: 8px; font-family: Consolas, Menlo, monospace;
   font-size: 13px; selection-background-color: %(accent)s; selection-color: %(bg)s; }
+QTextEdit#editor, QTextBrowser#preview { background: %(code_bg)s; color: %(fg)s; border: 2px solid %(border)s; padding: 6px;
+  font-size: 13px; selection-background-color: %(accent)s; selection-color: %(bg)s; }
 QScrollBar:vertical { background: %(bg_alt)s; width: 12px; margin: 0; border-left: 2px solid %(border)s; }
 QScrollBar::handle:vertical { background: %(border_hi)s; min-height: 24px; margin: 2px; }
 QScrollBar::handle:vertical:hover { background: %(accent)s; }

@@ -26,6 +26,7 @@ class HomeWindow(QWidget):
     close_window_requested = Signal(str)
     forget_requested = Signal(str)      # file key
     settings_requested = Signal()
+    ai_create_requested = Signal()
     exit_requested = Signal()
 
     def __init__(self, db, window_manager, settings):
@@ -78,9 +79,13 @@ class HomeWindow(QWidget):
         self.open_btn.setObjectName("primary")
         self.open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_btn.clicked.connect(self.open_dialog_requested)
+        self.ai_btn = QPushButton("\u270e  New with AI")
+        self.ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.ai_btn.clicked.connect(self.ai_create_requested)
         settings_btn = QPushButton("Settings")
         settings_btn.clicked.connect(self.settings_requested)
         row.addWidget(self.open_btn, 1)
+        row.addWidget(self.ai_btn)
         row.addWidget(settings_btn)
         root.addLayout(row)
 

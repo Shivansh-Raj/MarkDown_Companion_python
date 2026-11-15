@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..markdown.theme import chrome_qss
 from ..services.persistence import Database
+from ..ui.ai_create_window import AiCreateWindow
 from ..ui.file_picker import pick_markdown_file
 from ..ui.home_window import HomeWindow
 from ..ui.pixel_icon import app_icon
@@ -44,6 +45,7 @@ class CompanionApp(QObject):
         self.shortcuts = ShortcutManager(backend, self)
         self.tray = TrayIcon(self.db, self.windows, self) if with_tray else None
         self._settings_win: SettingsWindow | None = None
+        self._ai_win: AiCreateWindow | None = None
         self.home = HomeWindow(self.db, self.windows, self.settings)
         self.home.open_dialog_requested.connect(self.open_via_picker)
         self.home.open_path_requested.connect(self.open_path)
@@ -51,6 +53,7 @@ class CompanionApp(QObject):
         self.home.close_window_requested.connect(self.windows.close_window)
         self.home.forget_requested.connect(self.db.forget_file)
         self.home.settings_requested.connect(self.show_settings)
+        self.home.ai_create_requested.connect(self.show_ai_create)
         self.home.exit_requested.connect(self.exit)
 
         self.windows.home_requested.connect(self.home.present)
@@ -95,6 +98,8 @@ class CompanionApp(QObject):
         self._shutdown_done = True
         self.shortcuts.unregister_all()
         self.home.hide()
+        if self._ai_win is not None:
+            self._ai_win.close()
         self.windows.shutdown()
         self.files.shutdown()
         if self.tray:
@@ -183,11 +188,27 @@ class CompanionApp(QObject):
 
     def show_settings(self) -> None:
         if self._settings_win is None:
-            self._settings_win = SettingsWindow(self.settings, self.shortcut_status or "Shortcuts registered.")
+            self._settings_win = SettingsWindow(self.settings, self.shortcut_status or "Shortcuts registered.",
+                                                self.windows.ai)
             self._settings_win.applied.connect(lambda: None)
         self._settings_win.show()
         self._settings_win.raise_()
         self._settings_win.activateWindow()
+
+    def show_ai_create(self) -> None:
+        if self._ai_win is None:
+            self._ai_win = AiCreateWindow(self.windows.ai)
+            self._ai_win.created.connect(self.open_path)
+            self._ai_win.finished.connect(lambda _r: self._drop_ai_win())
+        self._ai_win.show_start()
+        self._ai_win.show()
+        self._ai_win.raise_()
+        self._ai_win.activateWindow()
+
+    def _drop_ai_win(self) -> None:
+        w, self._ai_win = self._ai_win, None
+        if w is not None:
+            w.deleteLater()
 
     def _show_problem(self, title: str, text: str, modal: bool = True) -> None:
         log.warning("user message title=%s text=%s", title, text.replace("\n", " | "))

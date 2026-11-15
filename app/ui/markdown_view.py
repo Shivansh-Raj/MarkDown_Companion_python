@@ -77,6 +77,9 @@ class FallbackMarkdownView(QTextBrowser):
             f" h1, h2 {{ color: {t['accent']}; }} th {{ color: {t['accent']}; }} table {{ border: 1px; }}")
         self.setHtml(body_html)
 
+    def selected_text(self) -> str:
+        return self.textCursor().selectedText().replace("\u2029", "\n")
+
     def update_body(self, body_html: str) -> None:
         bar = self.verticalScrollBar()
         pos = bar.value()
@@ -129,6 +132,9 @@ try:
             self.base_url = QUrl.fromLocalFile(os.path.join(base_dir, ""))
             self.page().setBackgroundColor(QColor(load_theme(theme_id)["bg"]))
             self.setHtml(build_page(body_html, theme_id), self.base_url)
+
+        def selected_text(self) -> str:
+            return self.selectedText().replace("\u2029", "\n")
 
         def update_body(self, body_html: str) -> None:
             if not self._loaded:

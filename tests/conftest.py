@@ -5,6 +5,7 @@ from pathlib import Path
 
 # Must be set before Qt is imported anywhere.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("MDC_NO_KEYRING", "1")   # tests never touch the real OS keychain
 os.environ.setdefault("MDC_NO_WEBENGINE", "1")  # lightweight view; test_webengine.py opts back in
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

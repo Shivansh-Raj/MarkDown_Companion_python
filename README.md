@@ -28,6 +28,8 @@ lightweight QTextBrowser fallback view.
 | Title-bar buttons | EDIT · ⌂ home · roll-up (compact) · refresh (F5) · cycle opacity · minimize · close (Ctrl+W) |
 | Edit source | **EDIT** button (or Ctrl+E) → raw Markdown; **SAVE** / Ctrl+S writes the file, **CANCEL** / Esc leaves (press twice to discard unsaved text). If the file changed on disk meanwhile, the save is refused and your text is kept; pressing SAVE again deliberately overwrites. Line endings and BOM are preserved. |
 | Tick a task | click its checkbox; the `.md` file is rewritten (only that `[ ]`↔`[x]`) |
+| New file with AI | home screen → **New with AI**: describe the file, pick a type (or Auto-detect: plan / task list / scheduler / notes); a pixel cat types while the text streams in; **Save & open** writes it to the AI folder |
+| Edit with AI | **AI** button in a note window: choose **your highlighted text**, a **heading section**, or the **whole file**, describe the change, review a red/green diff, **Apply**. The result lands in the edit draft (nothing is written until **SAVE**); **UNDO AI** steps back. Completed tasks stay completed, and text outside the chosen scope is never touched. |
 | Settings, restart, exit | tray menu |
 
 Closing a window never quits the app; use tray → *Exit*.
@@ -85,3 +87,13 @@ app/utils     paths, logging, geometry
 assets/themes JSON palettes (retro, amber) + shared base.css; add a theme = add a JSON file
 tests/        pytest suite
 ```
+
+
+## AI (Groq)
+
+Optional. Add a free API key from console.groq.com in **Settings → AI** (or the first time you use *New with AI*).
+The key is stored in the OS keychain when the `keyring` package can reach one, otherwise in the local settings
+database; it is sent only to `api.groq.com`. Use **Test** to check it. The model is chosen automatically from the
+models your key can use. Settings also has the folder for AI-created files (default `~/Documents/MarkdownCompanion`)
+and an **Animations** switch (typing cat, diff reveal). AI edits send the chosen text to Groq, so use the narrower
+scopes for anything sensitive. Without a key the app behaves exactly as before.
