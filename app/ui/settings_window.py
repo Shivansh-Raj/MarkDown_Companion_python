@@ -57,6 +57,9 @@ class SettingsWindow(QDialog):
         self.compact.setChecked(settings.get("compact_default"))
         self.restore = QCheckBox("Reopen last session's windows at startup")
         self.restore.setChecked(settings.get("restore_windows"))
+        self.show_home = QCheckBox("Show the home screen at startup")
+        self.show_home.setChecked(settings.get("show_home"))
+        form.addRow("", self.show_home)
         form.addRow("", self.compact)
         form.addRow("", self.restore)
 
@@ -86,6 +89,7 @@ class SettingsWindow(QDialog):
         s.set("theme", self.theme.currentData())
         s.set("compact_default", self.compact.isChecked())
         s.set("restore_windows", self.restore.isChecked())
+        s.set("show_home", self.show_home.isChecked())
         s.set("shortcut_primary", _seq_text(self.primary))
         s.set("shortcut_picker", _seq_text(self.picker))
         self.applied.emit()

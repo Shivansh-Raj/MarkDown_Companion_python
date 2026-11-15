@@ -189,3 +189,45 @@ def test_deleted_file_shows_banner_and_keeps_content(make_app, md):
     p.unlink()
     assert wait_for(lambda: w.status.text() != "")
     assert "keep me" in w.view.toPlainText()
+
+
+# ---- home screen --------------------------------------------------------------------
+def test_home_shows_on_startup_without_opening_picker(make_app, monkeypatch):
+    app = make_app()
+    monkeypatch.setattr("app.core.application.pick_markdown_file", lambda d: (_ for _ in ()).throw(AssertionError("picker")))
+    app.start()
+    assert app.home.isVisible() and app.windows.windows() == []
+
+
+def test_home_can_be_disabled_or_skipped(make_app):
+    app = make_app()
+    app.start(show_home=False)
+    assert not app.home.isVisible()
+    app2 = make_app()
+    app2.settings.set("show_home", False)
+    app2.start()
+    assert not app2.home.isVisible()
+
+
+def test_home_lists_recent_and_open_windows(make_app, md):
+    app = make_app()
+    p = md("home.md")
+    w = app.open_path(str(p))
+    app.home.refresh()
+    assert "home.md" in app.home.recent_list.item(0).text()
+    assert app.home.windows_list.item(0).data(0x100) == w.key
+    app.home.recent_list.itemActivated.emit(app.home.recent_list.item(0))      # opens/focuses, no duplicate
+    assert len(app.windows.windows()) == 1
+
+
+def test_home_marks_missing_and_forgets(make_app, md):
+    app = make_app()
+    p = md("m.md")
+    app.open_path(str(p))
+    app.windows.close_window(app.windows.windows()[0].key)
+    p.unlink()
+    app.home.refresh()
+    assert "[missing]" in app.home.recent_list.item(0).text()
+    app.home.forget_requested.emit(app.home.recent_list.item(0).data(0x101))
+    app.home.refresh()
+    assert "Nothing yet" in app.home.recent_list.item(0).text()

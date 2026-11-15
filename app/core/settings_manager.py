@@ -16,6 +16,7 @@ DEFAULTS: dict[str, Any] = {
     "compact_default": False,
     "restore_windows": False,             # reopen last session's windows on startup
     "last_dir": "",
+    "show_home": True,                    # show the home screen on startup
 }
 
 
@@ -26,6 +27,7 @@ def _valid_opacity(v: Any) -> float:
 _VALIDATORS = {
     "opacity": _valid_opacity,
     "compact_default": bool,
+    "show_home": bool,
     "restore_windows": bool,
     "theme": str, "last_dir": str, "associated_file": str,
     "shortcut_primary": str, "shortcut_picker": str,

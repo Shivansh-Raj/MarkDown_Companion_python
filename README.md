@@ -20,8 +20,9 @@ lightweight QTextBrowser fallback view.
 
 | Action | How |
 |---|---|
+| Home screen | shown at startup and when you click the tray icon: recent files, open windows, drag & drop `.md` files (can be turned off in Settings) |
 | Open / focus main file | **Ctrl+Shift+M** (first press asks for a file, then remembers it) |
-| Open any file | tray icon click, tray → *Open Markdown file…*, or the optional "picker" shortcut |
+| Open any file | home screen button or drag & drop, tray → *Open Markdown file…*, or the optional "picker" shortcut |
 | Several files | each file gets its own window; opening the same file again focuses it |
 | Move / resize | drag the title bar / drag any edge or corner |
 | Title-bar buttons | roll-up (compact) · refresh (F5) · cycle opacity · minimize · close (Ctrl+W) |

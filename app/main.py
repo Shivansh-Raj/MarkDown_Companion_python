@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     if not app.acquire_single_instance():
         QMessageBox.information(None, "Markdown Companion V2", "Markdown Companion V2 is already running (check the tray).")
         return 0
-    app.start()
+    app.start(show_home=not ns.files)
     for f in ns.files:
         app.open_path(os.path.abspath(f))
     return qapp.exec()

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from ..markdown.theme import chrome_qss
 from ..services.persistence import Database
 from ..ui.file_picker import pick_markdown_file
+from ..ui.home_window import HomeWindow
 from ..ui.pixel_icon import app_icon
 from ..ui.settings_window import SettingsWindow
 from ..ui.tray_icon import TrayIcon
@@ -43,6 +44,14 @@ class CompanionApp(QObject):
         self.shortcuts = ShortcutManager(backend, self)
         self.tray = TrayIcon(self.db, self.windows, self) if with_tray else None
         self._settings_win: SettingsWindow | None = None
+        self.home = HomeWindow(self.db, self.windows, self.settings)
+        self.home.open_dialog_requested.connect(self.open_via_picker)
+        self.home.open_path_requested.connect(self.open_path)
+        self.home.focus_requested.connect(self.windows.focus)
+        self.home.close_window_requested.connect(self.windows.close_window)
+        self.home.forget_requested.connect(self.db.forget_file)
+        self.home.settings_requested.connect(self.show_settings)
+        self.home.exit_requested.connect(self.exit)
 
         self.windows.message.connect(self._show_problem)
         self.files.watcher_error.connect(lambda m: self._show_problem("File watching", m, modal=False))
@@ -50,6 +59,7 @@ class CompanionApp(QObject):
         self.settings.changed.connect(self._on_setting_changed)
         qapp.aboutToQuit.connect(self.shutdown)
         if self.tray:
+            self.tray.home_requested.connect(self.home.present)
             self.tray.open_file_requested.connect(self.open_via_picker)
             self.tray.open_recent_requested.connect(self.open_path)
             self.tray.focus_window_requested.connect(self.windows.focus)
@@ -67,13 +77,15 @@ class CompanionApp(QObject):
         self._lock = None
         return False
 
-    def start(self) -> None:
+    def start(self, show_home: bool = True) -> None:
         self.qapp.setStyleSheet(chrome_qss(self.settings.get("theme")))
         if self.tray and not self.tray.show():
             log.warning("system tray not available")
         self._register_shortcuts()
         if self.settings.get("restore_windows"):
             self.windows.restore_open_windows()
+        if show_home and self.settings.get("show_home"):
+            self.home.present()
         log.info("started")
 
     def shutdown(self) -> None:
@@ -81,6 +93,7 @@ class CompanionApp(QObject):
             return
         self._shutdown_done = True
         self.shortcuts.unregister_all()
+        self.home.hide()
         self.windows.shutdown()
         self.files.shutdown()
         if self.tray:
@@ -109,6 +122,7 @@ class CompanionApp(QObject):
             if not res.ok:
                 problems.append(res.message)
         self.shortcut_status = "\n".join(problems)
+        self.home.set_shortcut_status(self.shortcut_status.split("\n")[0] if problems else "")
         if problems:
             self._show_problem("Shortcut problem", self.shortcut_status + "\n\nChange it in Settings.", modal=False)
         if self._settings_win:

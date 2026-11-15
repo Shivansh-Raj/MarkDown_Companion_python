@@ -12,6 +12,7 @@ from .pixel_icon import app_icon
 
 
 class TrayIcon(QObject):
+    home_requested = Signal()
     open_file_requested = Signal()
     open_recent_requested = Signal(str)
     focus_window_requested = Signal(str)
@@ -26,6 +27,7 @@ class TrayIcon(QObject):
         self.tray = QSystemTrayIcon(app_icon(), self)
         self.tray.setToolTip("Markdown Companion V2")
         self.menu = QMenu()
+        self.menu.addAction("Show home", self.home_requested.emit)
         self.menu.addAction("Open Markdown file…", self.open_file_requested.emit)
         self.recent_menu = self.menu.addMenu("Open recent files")
         self.windows_menu = self.menu.addMenu("Manage open windows")
@@ -50,8 +52,8 @@ class TrayIcon(QObject):
             self.tray.showMessage(title, text, QSystemTrayIcon.MessageIcon.Warning, 6000)
 
     def _on_activated(self, reason) -> None:
-        if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            self.open_file_requested.emit()
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            self.home_requested.emit()
 
     def _fill_recent(self) -> None:
         self.recent_menu.clear()
