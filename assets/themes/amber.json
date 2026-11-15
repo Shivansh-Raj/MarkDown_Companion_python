@@ -1,0 +1,7 @@
+{
+  "name": "Amber Terminal",
+  "bg": "#16120a", "bg_alt": "#211b0e", "fg": "#ffcf6e", "muted": "#a07c32",
+  "accent": "#ffb000", "accent2": "#9bd36a", "link": "#ffd98a",
+  "border": "#5c4616", "border_hi": "#a8801f", "shadow": "#050403",
+  "code_bg": "#0e0b06", "pygments": "monokai"
+}

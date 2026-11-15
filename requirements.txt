@@ -1,0 +1,5 @@
+PySide6>=6.6
+markdown-it-py>=3.0
+mdit-py-plugins>=0.4
+Pygments>=2.17
+watchdog>=4.0
