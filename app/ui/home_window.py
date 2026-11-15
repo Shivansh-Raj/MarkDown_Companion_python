@@ -3,15 +3,20 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton,
                                QVBoxLayout, QWidget)
 
+from .markdown_window import CORNER, EDGE
 from .pixel_icon import app_icon
+from .title_bar import TitleBar
 
 MD_EXT = (".md", ".markdown", ".mdown", ".txt")
 _KEY = Qt.ItemDataRole.UserRole
+
+
+_E = Qt.Edge
 
 
 class HomeWindow(QWidget):
@@ -24,18 +29,40 @@ class HomeWindow(QWidget):
     exit_requested = Signal()
 
     def __init__(self, db, window_manager, settings):
-        super().__init__()
+        # Same chrome as the note windows: frameless, always on top, pixel frame, custom title bar.
+        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
+                         | Qt.WindowType.WindowStaysOnTopHint)
         self._db, self._wm, self._settings = db, window_manager, settings
         self.shortcut_status = ""
-        self.setObjectName("home")
+        self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setMouseTracking(True)
+        self.setMinimumSize(380, 420)
         self.setWindowTitle("Markdown Companion V2")
         self.setWindowIcon(app_icon())
         self.setAcceptDrops(True)
         self.resize(480, 600)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(18, 16, 18, 14)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(EDGE, EDGE, EDGE, EDGE)
+        frame = QWidget(self)
+        frame.setObjectName("frame")
+        frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        outer.addWidget(frame)
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(2, 2, 2, 2)
+        fl.setSpacing(0)
+        self.title_bar = TitleBar("Markdown Companion", buttons=("minimize", "close"))
+        self.title_bar.minimize_clicked.connect(self.showMinimized)
+        self.title_bar.close_clicked.connect(self.hide)     # app keeps running in the tray
+        fl.addWidget(self.title_bar)
+        body = QWidget()
+        body.setObjectName("home")
+        body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        fl.addWidget(body, 1)
+
+        root = QVBoxLayout(body)
+        root.setContentsMargins(18, 14, 18, 12)
         root.setSpacing(8)
 
         hero = QLabel("MARKDOWN\nCOMPANION")
@@ -174,6 +201,38 @@ class HomeWindow(QWidget):
         m.addAction("Open", lambda: self.open_path_requested.emit(it.data(_KEY)))
         m.addAction("Remove from list", lambda: (self.forget_requested.emit(it.data(_KEY + 1)), self.refresh()))
         m.exec(self.recent_list.viewport().mapToGlobal(pos))
+
+    # edge resize (same behaviour as the note windows) -------------------------------
+    def _edges_at(self, pos: QPoint) -> Qt.Edge:
+        w, h = self.width(), self.height()
+        edges = Qt.Edge(0)
+        if pos.x() < EDGE or (pos.x() < CORNER and pos.y() > h - EDGE):
+            edges |= _E.LeftEdge
+        if pos.x() > w - EDGE or (pos.x() > w - CORNER and pos.y() > h - EDGE):
+            edges |= _E.RightEdge
+        if pos.y() < EDGE:
+            edges |= _E.TopEdge
+        if pos.y() > h - EDGE:
+            edges |= _E.BottomEdge
+        return edges
+
+    def mouseMoveEvent(self, e: QMouseEvent) -> None:  # noqa: N802
+        edges = self._edges_at(e.position().toPoint())
+        horiz, vert = bool(edges & (_E.LeftEdge | _E.RightEdge)), bool(edges & (_E.TopEdge | _E.BottomEdge))
+        if horiz and vert:
+            fwd = bool(edges & _E.LeftEdge) == bool(edges & _E.TopEdge)
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor if fwd else Qt.CursorShape.SizeBDiagCursor)
+        elif horiz:
+            self.setCursor(Qt.CursorShape.SizeHorCursor)
+        elif vert:
+            self.setCursor(Qt.CursorShape.SizeVerCursor)
+        else:
+            self.unsetCursor()
+
+    def mousePressEvent(self, e: QMouseEvent) -> None:  # noqa: N802
+        edges = self._edges_at(e.position().toPoint())
+        if e.button() == Qt.MouseButton.LeftButton and edges and self.windowHandle() is not None:
+            self.windowHandle().startSystemResize(edges)
 
     # drag & drop ------------------------------------------------------------------
     def dragEnterEvent(self, e: QDragEnterEvent) -> None:  # noqa: N802

@@ -231,3 +231,13 @@ def test_home_marks_missing_and_forgets(make_app, md):
     app.home.forget_requested.emit(app.home.recent_list.item(0).data(0x101))
     app.home.refresh()
     assert "Nothing yet" in app.home.recent_list.item(0).text()
+
+
+def test_home_uses_same_chrome_as_note_windows(make_app, md):
+    from PySide6.QtCore import Qt
+    app = make_app()
+    w = app.open_path(str(md()))
+    for win in (app.home, w):
+        f = win.windowFlags()
+        assert f & Qt.WindowType.FramelessWindowHint and f & Qt.WindowType.WindowStaysOnTopHint
+        assert win.findChild(type(w.title_bar), "titlebar") is not None

@@ -15,7 +15,8 @@ class TitleBar(QWidget):
     minimize_clicked = Signal()
     close_clicked = Signal()
 
-    def __init__(self, title: str, parent: QWidget | None = None):
+    def __init__(self, title: str, parent: QWidget | None = None,
+                 buttons: tuple[str, ...] = ("compact", "refresh", "opacity", "minimize", "close")):
         super().__init__(parent)
         self.setObjectName("titlebar")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -27,10 +28,14 @@ class TitleBar(QWidget):
         self.title.setObjectName("title")
         lay.addWidget(self.title, 1)
         self.compact_btn = self._button("▴", "Roll up / expand (double-click title)", self.compact_clicked)
-        self._button("↻", "Refresh from disk (F5)", self.refresh_clicked)
-        self._button("◐", "Cycle opacity", self.opacity_clicked)
-        self._button("_", "Minimize", self.minimize_clicked)
-        self._button("×", "Close window", self.close_clicked, role="close")
+        self.compact_btn.setVisible("compact" in buttons)
+        for name, glyph, tip, sig in (("refresh", "↻", "Refresh from disk (F5)", self.refresh_clicked),
+                                      ("opacity", "◐", "Cycle opacity", self.opacity_clicked),
+                                      ("minimize", "_", "Minimize", self.minimize_clicked)):
+            if name in buttons:
+                self._button(glyph, tip, sig)
+        if "close" in buttons:
+            self._button("×", "Close window", self.close_clicked, role="close")
         self._drag_origin: QPoint | None = None
 
     def _button(self, text: str, tip: str, signal: Signal, role: str = "") -> QToolButton:
@@ -68,5 +73,5 @@ class TitleBar(QWidget):
         self._drag_origin = None
 
     def mouseDoubleClickEvent(self, e: QMouseEvent) -> None:  # noqa: N802
-        if e.button() == Qt.MouseButton.LeftButton:
+        if e.button() == Qt.MouseButton.LeftButton and self.compact_btn.isVisible():
             self.compact_clicked.emit()
