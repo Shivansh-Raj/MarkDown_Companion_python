@@ -79,6 +79,8 @@ class WindowManager(QObject):
         win.state_changed.connect(self._mark_dirty)
         win.link_requested.connect(self.open_file)
         win.home_requested.connect(self.home_requested)
+        win.edit_requested.connect(self._on_edit_requested)
+        win.save_requested.connect(self._on_save_requested)
         self._windows[key] = win
         self._db.set_open(key, True)
         win.show()
@@ -181,6 +183,25 @@ class WindowManager(QObject):
             if (x, y, w) != (g.x(), g.y(), g.width()):
                 win.setGeometry(x, y, w, g.height() if win.compact else h)
 
+    def has_unsaved(self) -> bool:
+        return any(w.is_dirty() for w in self._windows.values())
+
+    # editing -------------------------------------------------------------------------
+    def _on_edit_requested(self, key: str) -> None:
+        win = self._windows.get(key)
+        if win is None:
+            return
+        snap, reason = self._files.begin_edit(key)
+        if snap is None:
+            win.show_status(reason, "error")
+        else:
+            win.enter_edit(snap.text, snap.digest)
+
+    def _on_save_requested(self, key: str, digest: str, text: str) -> None:
+        win = self._windows.get(key)
+        if win is not None:
+            win.save_finished(self._files.save_content(key, digest, text))
+
     # file events --------------------------------------------------------------------
     def _on_content(self, key: str, text: str) -> None:
         win = self._windows.get(key)
@@ -191,6 +212,7 @@ class WindowManager(QObject):
         win = self._windows.get(key)
         if not win:
             return
+        win.set_available(state == "ok")
         if state == "ok":
             win.clear_status()
         else:

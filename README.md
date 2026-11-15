@@ -25,7 +25,8 @@ lightweight QTextBrowser fallback view.
 | Open any file | home screen button or drag & drop, tray → *Open Markdown file…*, or the optional "picker" shortcut |
 | Several files | each file gets its own window; opening the same file again focuses it |
 | Move / resize | drag the title bar / drag any edge or corner |
-| Title-bar buttons | ⌂ home · roll-up (compact) · refresh (F5) · cycle opacity · minimize · close (Ctrl+W) |
+| Title-bar buttons | EDIT · ⌂ home · roll-up (compact) · refresh (F5) · cycle opacity · minimize · close (Ctrl+W) |
+| Edit source | **EDIT** button (or Ctrl+E) → raw Markdown; **SAVE** / Ctrl+S writes the file, **CANCEL** / Esc leaves (press twice to discard unsaved text). If the file changed on disk meanwhile, the save is refused and your text is kept; pressing SAVE again deliberately overwrites. Line endings and BOM are preserved. |
 | Tick a task | click its checkbox; the `.md` file is rewritten (only that `[ ]`↔`[x]`) |
 | Settings, restart, exit | tray menu |
 

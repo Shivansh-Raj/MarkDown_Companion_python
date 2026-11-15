@@ -256,3 +256,74 @@ def test_home_reachable_after_closing_everything(make_app, md):
     w2 = app.open_path(str(md("again.md")))
     w2.title_bar.home_clicked.emit()              # title-bar home button
     assert app.home.isVisible()
+
+
+# ---- edit mode (window level) ------------------------------------------------------------
+def _edit(app, w, text=None):
+    w.title_bar.edit_btn.click()
+    assert w.editing
+    if text is not None:
+        w.editor.setPlainText(text)
+
+
+def test_edit_save_writes_file_and_rerenders(make_app, md):
+    app = make_app()
+    p = md("ed.md", "# Old\n")
+    w = app.open_path(str(p))
+    _edit(app, w, "# New heading\n\n- [ ] added\n")
+    assert w.is_dirty() and w.editor.isVisibleTo(w) and not w.view.isVisibleTo(w)
+    w.save_btn.click()
+    assert not w.editing and p.read_text() == "# New heading\n\n- [ ] added\n"
+    assert wait_for(lambda: "New heading" in w.view.toPlainText())
+
+
+def test_edit_cancel_needs_second_press_when_dirty(make_app, md):
+    app = make_app()
+    p = md("c2.md", "keep\n")
+    w = app.open_path(str(p))
+    _edit(app, w)
+    w.cancel_btn.click()                       # clean -> leaves immediately
+    assert not w.editing
+    _edit(app, w, "typed something\n")
+    w.cancel_btn.click()
+    assert w.editing and w.cancel_btn.text() == "DISCARD?"
+    w.cancel_btn.click()
+    assert not w.editing and p.read_text() == "keep\n"
+
+
+def test_edit_external_change_conflict_keeps_draft(make_app, md):
+    app = make_app()
+    p = md("cf.md", "base\n")
+    w = app.open_path(str(p))
+    _edit(app, w, "my draft\n")
+    p.write_text("external\n")
+    wait_for(lambda: False, 0.4)
+    assert w.editing and w.editor.toPlainText() == "my draft\n"      # editor undisturbed
+    w.save_btn.click()
+    assert w.editing and p.read_text() == "external\n"               # refused, text kept
+    assert "changed on disk" in w.status.text()
+    w.save_btn.click()                                               # deliberate overwrite
+    assert not w.editing and p.read_text() == "my draft\n"
+
+
+def test_edit_disabled_when_missing_or_not_utf8(make_app, md, tmp_path):
+    app = make_app()
+    p = md("m2.md", "x\n")
+    w = app.open_path(str(p))
+    p.unlink()
+    assert wait_for(lambda: not w.title_bar.edit_btn.isEnabled())
+    b = tmp_path / "bin.md"
+    b.write_bytes(b"caf\xe9\n")
+    w2 = app.open_path(str(b))
+    w2.title_bar.edit_btn.click()
+    assert not w2.editing and "UTF-8" in w2.status.text()
+
+
+def test_close_with_unsaved_edit_needs_confirmation(make_app, md):
+    app = make_app()
+    w = app.open_path(str(md("cl.md", "z\n")))
+    _edit(app, w, "unsaved\n")
+    w.title_bar.close_clicked.emit()
+    assert len(app.windows.windows()) == 1 and "Unsaved" in w.status.text()
+    w.title_bar.close_clicked.emit()
+    assert app.windows.windows() == []

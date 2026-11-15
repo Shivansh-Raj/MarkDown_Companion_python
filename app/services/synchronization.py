@@ -30,6 +30,7 @@ class Snapshot:
     mtime_ns: int
     size: int
     digest: str        # SHA-256 of the raw bytes
+    valid_utf8: bool = True   # False -> display only, never rewritten
 
 
 def _read_raw(path: str) -> tuple[bytes, os.stat_result]:
@@ -40,8 +41,13 @@ def _read_raw(path: str) -> tuple[bytes, os.stat_result]:
 
 def read_snapshot(path: str) -> Snapshot:
     data, st = _read_raw(path)
+    try:
+        data.decode("utf-8")
+        valid = True
+    except UnicodeDecodeError:
+        valid = False
     return Snapshot(data.decode("utf-8", errors="replace"), st.st_mtime_ns, st.st_size,
-                    hashlib.sha256(data).hexdigest())
+                    hashlib.sha256(data).hexdigest(), valid)
 
 
 class ChangeKind(enum.Enum):
@@ -148,6 +154,48 @@ class SynchronizationService:
         log.warning("toggle failed path=%s reason=%s", path, last_error)
         return ToggleResult(ToggleStatus.ERROR, self._safe_snapshot(path),
                             f"Could not save the checkbox ({last_error}). Nothing was changed.")
+
+    def save_content(self, path: str, expected_digest: str, text: str) -> ToggleResult:
+        """Write the whole text from edit mode, but only if the file still has `expected_digest`.
+
+        On a mismatch nothing is written and the latest on-disk snapshot is returned (CONFLICT);
+        the caller keeps the user's text and may save again against the new digest to deliberately
+        overwrite. Original line endings (CRLF/LF) and a UTF-8 BOM are preserved.
+        """
+        last_error = ""
+        for _ in range(self.WRITE_ATTEMPTS):
+            try:
+                raw, st = _read_raw(path)
+            except OSError as exc:
+                return ToggleResult(ToggleStatus.ERROR, self._safe_snapshot(path),
+                                    f"Cannot save, the file is not readable: {exc}")
+            digest = hashlib.sha256(raw).hexdigest()
+            if digest != expected_digest:
+                return ToggleResult(ToggleStatus.CONFLICT, self._adopt(path),
+                                    "The file changed on disk while you were editing. Your text is kept; "
+                                    "press SAVE again to overwrite it, or CANCEL to discard yours.")
+            try:
+                original = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return ToggleResult(ToggleStatus.ERROR, self._safe_snapshot(path),
+                                    "File is not valid UTF-8; refusing to modify it.")
+            crlf = original.count("\r\n")
+            eol = "\r\n" if crlf and crlf * 2 >= original.count("\n") else "\n"
+            body = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+            if eol != "\n":
+                body = body.replace("\n", eol)
+            data = (b"\xef\xbb\xbf" if raw.startswith(b"\xef\xbb\xbf") else b"") + body.encode("utf-8")
+            try:
+                if self._changed_since(path, digest):
+                    continue  # re-read; the next pass reports the conflict
+                self._atomic_write(path, data, st)
+            except OSError as exc:
+                last_error = str(exc)
+                time.sleep(0.05)
+                continue
+            return ToggleResult(ToggleStatus.OK, self._adopt(path))
+        return ToggleResult(ToggleStatus.ERROR, self._safe_snapshot(path),
+                            f"Could not save ({last_error or 'file kept changing'}). Your text is still in the editor.")
 
     # -- helpers -----------------------------------------------------------
     @staticmethod

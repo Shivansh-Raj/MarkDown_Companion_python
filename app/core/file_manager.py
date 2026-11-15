@@ -94,6 +94,25 @@ class FileManager(QObject):
         self._restored(key)
         self.content_changed.emit(key, snap.text)
 
+    def begin_edit(self, key: str):
+        """Latest snapshot to start editing from, or (None, reason) if the file can't be edited safely."""
+        real = self._paths.get(key)
+        if real is None:
+            return None, "Unknown file."
+        self._check(key)  # adopt any pending external change first so the base is current
+        snap = self.sync.known(real)
+        if snap is None or key in self._missing:
+            return None, "The file is not available right now."
+        if not snap.valid_utf8:
+            return None, "This file is not valid UTF-8, so it can only be viewed, not edited."
+        return snap, ""
+
+    def save_content(self, key: str, expected_digest: str, text: str):
+        real = self._paths.get(key)
+        if real is None:
+            return None
+        return self.sync.save_content(real, expected_digest, text)
+
     def toggle_checkbox(self, key: str, line: int, expected_checked: bool) -> None:
         real = self._paths.get(key)
         if real is None:

@@ -5,9 +5,10 @@ import os
 
 from PySide6.QtCore import QPoint, QTimer, Qt, Signal
 from PySide6.QtGui import QCursor, QKeySequence, QMouseEvent, QShortcut
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
 from ..markdown.renderer import render_markdown
+from ..services.synchronization import ToggleStatus
 from .markdown_view import create_view
 from .title_bar import HEIGHT as TITLE_H, TitleBar
 
@@ -22,6 +23,8 @@ _E = Qt.Edge
 class MarkdownWindow(QWidget):
     toggle_requested = Signal(str, int, bool)   # key, line, was_checked
     home_requested = Signal()
+    edit_requested = Signal(str)                # key: user pressed EDIT
+    save_requested = Signal(str, str, str)      # key, base digest, full text
     refresh_requested = Signal(str)
     close_requested = Signal(str)               # user hit close
     state_changed = Signal(str)                 # moved / resized / mode changed
@@ -32,6 +35,12 @@ class MarkdownWindow(QWidget):
                          | Qt.WindowType.WindowStaysOnTopHint)
         self.key, self.path, self.theme = key, path, theme
         self._compact = False
+        self._editing = False
+        self._available = True
+        self._edit_base = ""
+        self._draft0 = ""
+        self._confirm_discard = False
+        self._pending_text: str | None = None   # newer disk content queued while editing
         self._expanded_h = DEFAULT_SIZE[1]
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -57,13 +66,38 @@ class MarkdownWindow(QWidget):
         self.status.setWordWrap(True)
         self.status.hide()
         self.view = create_view(self.frame)
+
+        self.editbar = QWidget()
+        self.editbar.setObjectName("editbar")
+        self.editbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        eb = QHBoxLayout(self.editbar)
+        eb.setContentsMargins(8, 4, 8, 4)
+        self.save_btn = QPushButton("SAVE")
+        self.save_btn.setObjectName("primary")
+        self.cancel_btn = QPushButton("CANCEL")
+        hint = QLabel("Editing source \u00b7 Ctrl+S saves \u00b7 Esc cancels")
+        hint.setObjectName("hint")
+        eb.addWidget(self.save_btn)
+        eb.addWidget(self.cancel_btn)
+        eb.addWidget(hint, 1)
+        self.editbar.hide()
+        self.editor = QPlainTextEdit()
+        self.editor.setObjectName("editor")
+        self.editor.setTabStopDistance(28)
+        self.editor.hide()
+
         lay.addWidget(self.title_bar)
         lay.addWidget(self.status)
+        lay.addWidget(self.editbar)
         lay.addWidget(self.view, 1)
+        lay.addWidget(self.editor, 1)
 
         self._status_timer = QTimer(self, singleShot=True, interval=6000)
         self._status_timer.timeout.connect(self.clear_status)
-        self.title_bar.close_clicked.connect(lambda: self.close_requested.emit(self.key))
+        self.title_bar.close_clicked.connect(self._request_close)
+        self.title_bar.edit_clicked.connect(lambda: self.edit_requested.emit(self.key))
+        self.save_btn.clicked.connect(self.request_save)
+        self.cancel_btn.clicked.connect(self.cancel_edit)
         self.title_bar.minimize_clicked.connect(self.showMinimized)
         self.title_bar.home_clicked.connect(self.home_requested)
         self.title_bar.compact_clicked.connect(self.toggle_compact)
@@ -72,7 +106,11 @@ class MarkdownWindow(QWidget):
         self.view.toggle_requested.connect(lambda line, chk: self.toggle_requested.emit(self.key, line, chk))
         self.view.file_link_requested.connect(self.link_requested)
         QShortcut(QKeySequence("F5"), self, activated=lambda: self.refresh_requested.emit(self.key))
-        QShortcut(QKeySequence("Ctrl+W"), self, activated=lambda: self.close_requested.emit(self.key))
+        QShortcut(QKeySequence("Ctrl+W"), self, activated=self._request_close)
+        QShortcut(QKeySequence("Ctrl+E"), self, activated=self._start_edit_shortcut)
+        ctx = Qt.ShortcutContext.WidgetWithChildrenShortcut
+        QShortcut(QKeySequence("Ctrl+S"), self.editor, activated=self.request_save, context=ctx)
+        QShortcut(QKeySequence("Escape"), self.editor, activated=self.cancel_edit, context=ctx)
 
         self.set_opacity(opacity)
         if compact:
@@ -83,6 +121,9 @@ class MarkdownWindow(QWidget):
         self.view.set_content(render_markdown(text), self.theme, os.path.dirname(self.path))
 
     def update_markdown(self, text: str) -> None:
+        if self._editing:           # never disturb the editor; show the newest version afterwards
+            self._pending_text = text
+            return
         self.view.update_body(render_markdown(text))
 
     def set_theme(self, theme: str, text: str) -> None:
@@ -104,12 +145,104 @@ class MarkdownWindow(QWidget):
         self.status.hide()
         self.status.clear()
 
+    # edit mode (mirrors V1: raw source, SAVE / CANCEL, hash-guarded save) --------------
+    @property
+    def editing(self) -> bool:
+        return self._editing
+
+    def is_dirty(self) -> bool:
+        return self._editing and self.editor.toPlainText() != self._draft0
+
+    def set_available(self, available: bool) -> None:
+        self._available = available
+        self.title_bar.set_editing(self._editing, available)
+
+    def _start_edit_shortcut(self) -> None:
+        if not self._editing and self._available:
+            self.edit_requested.emit(self.key)
+
+    def enter_edit(self, text: str, digest: str) -> None:
+        if self._compact:
+            self.set_compact(False)
+        self._edit_base = digest
+        self._close_armed = False
+        self._pending_text = None
+        self._confirm_discard = False
+        self.editor.setPlainText(text.lstrip("\ufeff"))
+        self._draft0 = self.editor.toPlainText()
+        self._editing = True
+        self.clear_status()
+        self.view.hide()
+        self.editbar.show()
+        self.editor.show()
+        self.cancel_btn.setText("CANCEL")
+        self.title_bar.set_editing(True)
+        self.editor.setFocus()
+
+    def exit_edit(self) -> None:
+        self._editing = False
+        self._close_armed = False
+        self._confirm_discard = False
+        self.editor.hide()
+        self.editbar.hide()
+        self.view.show()
+        self.title_bar.set_editing(False, self._available)
+        if self._pending_text is not None:
+            text, self._pending_text = self._pending_text, None
+            self.view.update_body(render_markdown(text))
+
+    def cancel_edit(self) -> None:
+        if not self._editing:
+            return
+        if self.is_dirty() and not self._confirm_discard:
+            self._confirm_discard = True          # second press discards
+            self.cancel_btn.setText("DISCARD?")
+            return
+        self.exit_edit()
+
+    def request_save(self) -> None:
+        if not self._editing:
+            return
+        text = self.editor.toPlainText()
+        if text == self._draft0 and self._pending_text is None:
+            self.exit_edit()                      # nothing to write
+            return
+        self.save_requested.emit(self.key, self._edit_base, text)
+
+    def save_finished(self, result) -> None:
+        """Outcome of a save_requested (a ToggleResult-like object)."""
+        if result is None:
+            self.show_status("Could not save: the file is no longer tracked.", "error")
+        elif result.status is ToggleStatus.OK:
+            if result.snapshot is not None:
+                self._pending_text = result.snapshot.text
+            self.exit_edit()
+            self.show_status("Saved.", "info")
+        elif result.status is ToggleStatus.CONFLICT:
+            # keep the user's text; the next SAVE deliberately overwrites the newer disk version
+            if result.snapshot is not None:
+                self._edit_base = result.snapshot.digest
+                self._pending_text = result.snapshot.text
+            self.show_status(result.message, "error", persistent=True)
+        else:
+            self.show_status(result.message, "error", persistent=True)
+
+    def _request_close(self) -> None:
+        if self.is_dirty() and not getattr(self, "_close_armed", False):
+            self._close_armed = True
+            self.show_status("Unsaved changes! Press SAVE, or close again to discard them.", "error")
+            return
+        self._close_armed = False
+        self.close_requested.emit(self.key)
+
     # modes ---------------------------------------------------------------------
     @property
     def compact(self) -> bool:
         return self._compact
 
     def toggle_compact(self) -> None:
+        if self._editing:
+            return
         self.set_compact(not self._compact)
         self.state_changed.emit(self.key)
 

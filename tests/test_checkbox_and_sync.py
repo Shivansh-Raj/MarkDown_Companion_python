@@ -121,3 +121,40 @@ def test_non_utf8_file_is_refused(md, tmp_path):
 def test_digest_is_sha256(md):
     p = md(text="x")
     assert SynchronizationService().load(str(p)).digest == hashlib.sha256(b"x").hexdigest()
+
+
+# ---- edit mode: save_content -----------------------------------------------------------
+def test_save_content_preserves_crlf_and_bom(tmp_path):
+    p = tmp_path / "e.md"
+    p.write_bytes(b"\xef\xbb\xbf# T\r\nline\r\n")
+    s = SynchronizationService()
+    snap = s.load(str(p))
+    res = s.save_content(str(p), snap.digest, "# T\nline\nnew line\n")      # editor uses \n
+    assert res.status is ToggleStatus.OK
+    assert p.read_bytes() == b"\xef\xbb\xbf# T\r\nline\r\nnew line\r\n"
+    assert s.check(str(p)).kind is ChangeKind.UNCHANGED                     # no echo refresh
+
+
+def test_save_conflict_keeps_disk_then_explicit_overwrite(md):
+    p = md(text="one\n")
+    s = SynchronizationService()
+    base = s.load(str(p)).digest
+    p.write_text("changed elsewhere\n")
+    res = s.save_content(str(p), base, "my edit\n")
+    assert res.status is ToggleStatus.CONFLICT and p.read_text() == "changed elsewhere\n"
+    assert res.snapshot.text == "changed elsewhere\n"
+    res2 = s.save_content(str(p), res.snapshot.digest, "my edit\n")         # SAVE pressed again
+    assert res2.status is ToggleStatus.OK and p.read_text() == "my edit\n"
+
+
+def test_save_refuses_non_utf8_and_missing(tmp_path):
+    p = tmp_path / "b.md"
+    p.write_bytes(b"caf\xe9\n")
+    s = SynchronizationService()
+    snap = s.load(str(p))
+    assert snap.valid_utf8 is False
+    assert s.save_content(str(p), snap.digest, "x").status is ToggleStatus.ERROR
+    assert p.read_bytes() == b"caf\xe9\n"
+    p.unlink()
+    assert s.save_content(str(p), snap.digest, "x").status is ToggleStatus.ERROR
+    assert not p.exists()                                                    # never recreated

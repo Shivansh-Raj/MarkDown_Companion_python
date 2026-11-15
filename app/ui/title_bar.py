@@ -9,6 +9,7 @@ HEIGHT = 26
 
 
 class TitleBar(QWidget):
+    edit_clicked = Signal()
     home_clicked = Signal()
     compact_clicked = Signal()
     refresh_clicked = Signal()
@@ -17,7 +18,7 @@ class TitleBar(QWidget):
     close_clicked = Signal()
 
     def __init__(self, title: str, parent: QWidget | None = None,
-                 buttons: tuple[str, ...] = ("home", "compact", "refresh", "opacity", "minimize", "close")):
+                 buttons: tuple[str, ...] = ("edit", "home", "compact", "refresh", "opacity", "minimize", "close")):
         super().__init__(parent)
         self.setObjectName("titlebar")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -28,6 +29,9 @@ class TitleBar(QWidget):
         self.title = QLabel(title)
         self.title.setObjectName("title")
         lay.addWidget(self.title, 1)
+        self.edit_btn = None
+        if "edit" in buttons:
+            self.edit_btn = self._button("EDIT", "Edit the Markdown source (Ctrl+E)", self.edit_clicked, role="wide")
         if "home" in buttons:
             self._button("⌂", "Home screen (Ctrl+Shift+H)", self.home_clicked)
         self.compact_btn = self._button("▴", "Roll up / expand (double-click title)", self.compact_clicked)
@@ -53,6 +57,11 @@ class TitleBar(QWidget):
         b.clicked.connect(signal)
         self.layout().addWidget(b)
         return b
+
+    def set_editing(self, editing: bool, available: bool = True) -> None:
+        if self.edit_btn is not None:
+            self.edit_btn.setVisible(not editing)
+            self.edit_btn.setEnabled(available)
 
     def set_title(self, text: str) -> None:
         self.title.setText(text)

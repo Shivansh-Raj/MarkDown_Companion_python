@@ -66,6 +66,8 @@ QLabel#status { background: #5a2b2b; color: #ffd9d9; padding: 3px 8px; font-size
 QLabel#status[kind="info"] { background: %(bg_alt)s; color: %(accent2)s; border-bottom: 2px solid %(border)s; }
 QToolButton#tbtn { color: %(fg)s; background: %(bg)s; border: 2px solid %(border)s; min-width: 18px; max-width: 18px;
   min-height: 16px; max-height: 16px; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 11px; padding: 0; }
+QToolButton#tbtn[role="wide"] { min-width: 34px; max-width: 34px; }
+QToolButton#tbtn:disabled { color: %(border)s; }
 QToolButton#tbtn:hover { border-color: %(accent)s; color: %(accent)s; }
 QToolButton#tbtn:pressed { background: %(border)s; }
 QToolButton#tbtn[role="close"]:hover { background: #8a3b3b; color: white; border-color: #ff8a8a; }
@@ -76,6 +78,14 @@ QLabel#section { color: %(accent2)s; font-weight: bold; font-size: 11px; letter-
 QListWidget { background: %(code_bg)s; color: %(fg)s; border: 2px solid %(border)s; outline: 0; font-family: Consolas, Menlo, monospace; padding: 2px; }
 QListWidget::item { padding: 5px 6px; } QListWidget::item:hover { background: %(bg_alt)s; }
 QListWidget::item:selected { background: %(accent)s; color: %(bg)s; }
+QWidget#editbar { background: %(bg_alt)s; border-bottom: 2px solid %(border)s; }
+QWidget#editbar QPushButton { padding: 2px 10px; font-weight: bold; }
+QPlainTextEdit#editor { background: %(code_bg)s; color: %(fg)s; border: 0; padding: 8px; font-family: Consolas, Menlo, monospace;
+  font-size: 13px; selection-background-color: %(accent)s; selection-color: %(bg)s; }
+QScrollBar:vertical { background: %(bg_alt)s; width: 12px; margin: 0; border-left: 2px solid %(border)s; }
+QScrollBar::handle:vertical { background: %(border_hi)s; min-height: 24px; margin: 2px; }
+QScrollBar::handle:vertical:hover { background: %(accent)s; }
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; } QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 QPushButton#primary { background: %(accent)s; color: %(bg)s; font-weight: bold; padding: 8px 14px; border: 2px solid %(accent)s; }
 QPushButton#primary:hover { background: %(bg)s; color: %(accent)s; }
 QDialog, QMenu { background: %(bg)s; color: %(fg)s; font-family: Consolas, Menlo, monospace; }

@@ -104,10 +104,22 @@ class CompanionApp(QObject):
             self._lock.unlock()
         log.info("shutdown complete")
 
+    def _confirm_discard_unsaved(self) -> bool:
+        if not self.windows.has_unsaved() or os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+            return True
+        box = QMessageBox(QMessageBox.Icon.Warning, "Unsaved changes",
+                          "Some windows have unsaved edits. Quit and discard them?",
+                          QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel)
+        box.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        return box.exec() == QMessageBox.StandardButton.Discard
+
     def exit(self) -> None:
-        self.qapp.quit()
+        if self._confirm_discard_unsaved():
+            self.qapp.quit()
 
     def restart(self) -> None:
+        if not self._confirm_discard_unsaved():
+            return
         self._restarting = True
         self.shutdown()  # releases hotkeys + lock so the new instance can take them
         args = sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv[:]
