@@ -16,7 +16,7 @@ from .title_bar import HEIGHT as TITLE_H, TitleBar
 
 EDGE = 6                      # resize/shadow margin around the frame
 CORNER = 14
-MIN_W, MIN_H = 300, 140
+MIN_W, MIN_H = 330, 140
 OPACITY_STEPS = (1.0, 0.85, 0.7, 0.55)
 DEFAULT_SIZE = (420, 520)
 _E = Qt.Edge

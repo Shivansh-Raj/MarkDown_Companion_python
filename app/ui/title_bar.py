@@ -5,8 +5,8 @@ from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QToolButton, QWidget
 
-HEIGHT = 26
-BTN_W, BTN_WIDE_W, BTN_H = 18, 38, 18
+HEIGHT = 30
+BTN_W, BTN_WIDE_W, BTN_H = 21, 40, 21
 
 
 class ElidedLabel(QLabel):
@@ -52,7 +52,7 @@ class TitleBar(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedHeight(HEIGHT)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 2, 4, 2)
+        lay.setContentsMargins(10, 3, 6, 3)
         lay.setSpacing(3)
         self.title = ElidedLabel(title)
         self.title.setObjectName("title")

@@ -3,5 +3,6 @@
   "bg": "#f6ecd6", "bg_alt": "#ecdcb6", "fg": "#2a1d1a", "muted": "#6f5f55",
   "accent": "#c23b35", "accent2": "#1f7a5c", "link": "#1d5fa8",
   "border": "#b9a88a", "border_hi": "#2a1d1a", "shadow": "#2a1d1a",
+  "accent_ink": "#fff8e6",
   "code_bg": "#fffdf5", "pygments": "friendly"
 }

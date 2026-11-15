@@ -38,7 +38,7 @@ class HomeWindow(QWidget):
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
-        self.setMinimumSize(380, 420)
+        self.setMinimumSize(400, 500)
         self.setWindowTitle("Markdown Companion V2")
         self.setWindowIcon(app_icon())
         self.setAcceptDrops(True)
@@ -74,19 +74,23 @@ class HomeWindow(QWidget):
         root.addWidget(hero)
         root.addWidget(self.hint)
 
-        row = QHBoxLayout()
         self.open_btn = QPushButton("\u25b6  Open file\u2026")
         self.open_btn.setObjectName("primary")
-        self.open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_btn.clicked.connect(self.open_dialog_requested)
         self.ai_btn = QPushButton("\u270e  New with AI")
-        self.ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ai_btn.clicked.connect(self.ai_create_requested)
         settings_btn = QPushButton("Settings")
         settings_btn.clicked.connect(self.settings_requested)
-        row.addWidget(self.open_btn, 1)
-        row.addWidget(self.ai_btn)
-        row.addWidget(settings_btn)
+        for b in (self.open_btn, self.ai_btn, settings_btn):
+            b.setMinimumHeight(40)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.ai_btn.setMinimumWidth(150)                 # asymmetric 3D borders can make Qt's size hint too small
+        settings_btn.setMinimumWidth(110)
+        root.addWidget(self.open_btn)                    # the main action gets its own full-width row
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.addWidget(self.ai_btn, 1)
+        row.addWidget(settings_btn, 1)
         root.addLayout(row)
 
         self.drop_hint = QLabel("or drag & drop .md files anywhere on this window")
