@@ -133,7 +133,7 @@ def test_startup_registers_shortcut_and_opens_nothing(make_app):
     be = FakeBackend()
     app = make_app(be)
     app.start()
-    assert len(be.registered) == 1 and app.windows.windows() == []
+    assert len(be.registered) == 2 and app.windows.windows() == []   # main + home shortcuts
 
 
 def test_startup_survives_shortcut_conflict(make_app):
@@ -241,3 +241,18 @@ def test_home_uses_same_chrome_as_note_windows(make_app, md):
         f = win.windowFlags()
         assert f & Qt.WindowType.FramelessWindowHint and f & Qt.WindowType.WindowStaysOnTopHint
         assert win.findChild(type(w.title_bar), "titlebar") is not None
+
+
+def test_home_reachable_after_closing_everything(make_app, md):
+    app = make_app()
+    app.start(show_home=False)
+    w = app.open_path(str(md()))
+    app.home.hide()
+    app.windows.close_window(w.key)
+    assert not app.home.isVisible()
+    app._on_shortcut("home")                      # global shortcut
+    assert app.home.isVisible()
+    app.home.hide()
+    w2 = app.open_path(str(md("again.md")))
+    w2.title_bar.home_clicked.emit()              # title-bar home button
+    assert app.home.isVisible()

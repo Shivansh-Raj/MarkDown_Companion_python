@@ -31,7 +31,7 @@ If the later steps say "running scripts is disabled", run `Set-ExecutionPolicy -
 ```powershell
 .\.venv\Scripts\python run.py
 ```
-A **home screen** opens (recent files, open windows, "Open file…", drag & drop). The app also lives in the **system tray** (look under the `^` overflow arrow); clicking the tray icon brings the home screen back.
+A **home screen** opens (recent files, open windows, "Open file…", drag & drop). The app also lives in the **system tray** (look under the `^` overflow arrow); clicking the tray icon, pressing **Ctrl+Shift+H**, or the ⌂ button in any note window brings it back.
 
 - Press **Ctrl+Shift+M** from any app: the first time you choose a `.md` file, afterwards it re-focuses that file's window.
 - Left-click the tray icon, or right-click it for *Open Markdown file, Open recent, Manage open windows, Settings, Restart, Exit*.

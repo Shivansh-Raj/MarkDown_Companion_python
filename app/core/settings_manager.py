@@ -9,6 +9,7 @@ from ..services.persistence import Database
 
 DEFAULTS: dict[str, Any] = {
     "shortcut_primary": "Ctrl+Shift+M",   # open/focus the associated file
+    "shortcut_home": "Ctrl+Shift+H",      # show the home screen
     "shortcut_picker": "",                # optional: always open the file picker
     "associated_file": "",                # file bound to the primary shortcut
     "opacity": 1.0,                       # default for new windows
@@ -30,7 +31,7 @@ _VALIDATORS = {
     "show_home": bool,
     "restore_windows": bool,
     "theme": str, "last_dir": str, "associated_file": str,
-    "shortcut_primary": str, "shortcut_picker": str,
+    "shortcut_primary": str, "shortcut_picker": str, "shortcut_home": str,
 }
 
 

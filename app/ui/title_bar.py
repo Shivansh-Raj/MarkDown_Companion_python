@@ -9,6 +9,7 @@ HEIGHT = 26
 
 
 class TitleBar(QWidget):
+    home_clicked = Signal()
     compact_clicked = Signal()
     refresh_clicked = Signal()
     opacity_clicked = Signal()
@@ -16,7 +17,7 @@ class TitleBar(QWidget):
     close_clicked = Signal()
 
     def __init__(self, title: str, parent: QWidget | None = None,
-                 buttons: tuple[str, ...] = ("compact", "refresh", "opacity", "minimize", "close")):
+                 buttons: tuple[str, ...] = ("home", "compact", "refresh", "opacity", "minimize", "close")):
         super().__init__(parent)
         self.setObjectName("titlebar")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -27,6 +28,8 @@ class TitleBar(QWidget):
         self.title = QLabel(title)
         self.title.setObjectName("title")
         lay.addWidget(self.title, 1)
+        if "home" in buttons:
+            self._button("⌂", "Home screen (Ctrl+Shift+H)", self.home_clicked)
         self.compact_btn = self._button("▴", "Roll up / expand (double-click title)", self.compact_clicked)
         self.compact_btn.setVisible("compact" in buttons)
         for name, glyph, tip, sig in (("refresh", "↻", "Refresh from disk (F5)", self.refresh_clicked),

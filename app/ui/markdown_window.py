@@ -21,6 +21,7 @@ _E = Qt.Edge
 
 class MarkdownWindow(QWidget):
     toggle_requested = Signal(str, int, bool)   # key, line, was_checked
+    home_requested = Signal()
     refresh_requested = Signal(str)
     close_requested = Signal(str)               # user hit close
     state_changed = Signal(str)                 # moved / resized / mode changed
@@ -64,6 +65,7 @@ class MarkdownWindow(QWidget):
         self._status_timer.timeout.connect(self.clear_status)
         self.title_bar.close_clicked.connect(lambda: self.close_requested.emit(self.key))
         self.title_bar.minimize_clicked.connect(self.showMinimized)
+        self.title_bar.home_clicked.connect(self.home_requested)
         self.title_bar.compact_clicked.connect(self.toggle_compact)
         self.title_bar.refresh_clicked.connect(lambda: self.refresh_requested.emit(self.key))
         self.title_bar.opacity_clicked.connect(self.cycle_opacity)

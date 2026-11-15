@@ -25,8 +25,10 @@ class SettingsWindow(QDialog):
         form = QFormLayout()
 
         self.primary = QKeySequenceEdit(QKeySequence(settings.get("shortcut_primary")))
+        self.home_seq = QKeySequenceEdit(QKeySequence(settings.get("shortcut_home")))
         self.picker = QKeySequenceEdit(QKeySequence(settings.get("shortcut_picker")))
         form.addRow("Open / focus main file:", self.primary)
+        form.addRow("Show home screen:", self.home_seq)
         form.addRow("Always open file picker:", self.picker)
         self.status = QLabel(shortcut_status)
         self.status.setWordWrap(True)
@@ -91,5 +93,6 @@ class SettingsWindow(QDialog):
         s.set("restore_windows", self.restore.isChecked())
         s.set("show_home", self.show_home.isChecked())
         s.set("shortcut_primary", _seq_text(self.primary))
+        s.set("shortcut_home", _seq_text(self.home_seq))
         s.set("shortcut_picker", _seq_text(self.picker))
         self.applied.emit()

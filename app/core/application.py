@@ -22,7 +22,7 @@ from .shortcut_manager import HotkeyBackend, ShortcutManager
 from .window_manager import WindowManager
 
 log = get_logger("app")
-ACTION_PRIMARY, ACTION_PICKER = "primary", "picker"
+ACTION_PRIMARY, ACTION_PICKER, ACTION_HOME = "primary", "picker", "home"
 
 
 class CompanionApp(QObject):
@@ -53,6 +53,7 @@ class CompanionApp(QObject):
         self.home.settings_requested.connect(self.show_settings)
         self.home.exit_requested.connect(self.exit)
 
+        self.windows.home_requested.connect(self.home.present)
         self.windows.message.connect(self._show_problem)
         self.files.watcher_error.connect(lambda m: self._show_problem("File watching", m, modal=False))
         self.shortcuts.activated.connect(self._on_shortcut)
@@ -117,7 +118,8 @@ class CompanionApp(QObject):
     # shortcuts ---------------------------------------------------------------
     def _register_shortcuts(self) -> None:
         problems = []
-        for name, key in ((ACTION_PRIMARY, "shortcut_primary"), (ACTION_PICKER, "shortcut_picker")):
+        for name, key in ((ACTION_PRIMARY, "shortcut_primary"), (ACTION_HOME, "shortcut_home"),
+                           (ACTION_PICKER, "shortcut_picker")):
             res = self.shortcuts.register(name, self.settings.get(key))
             if not res.ok:
                 problems.append(res.message)
@@ -129,7 +131,7 @@ class CompanionApp(QObject):
             self._settings_win.set_shortcut_status(self.shortcut_status or "Shortcuts registered.")
 
     def _on_setting_changed(self, key: str) -> None:
-        if key in ("shortcut_primary", "shortcut_picker"):
+        if key in ("shortcut_primary", "shortcut_picker", "shortcut_home"):
             self._register_shortcuts()
         elif key == "theme":
             theme = self.settings.get("theme")
@@ -137,6 +139,9 @@ class CompanionApp(QObject):
             self.windows.apply_theme(theme)
 
     def _on_shortcut(self, action: str) -> None:
+        if action == ACTION_HOME:
+            self.home.present()
+            return
         if action == ACTION_PICKER:
             self.open_via_picker()
             return

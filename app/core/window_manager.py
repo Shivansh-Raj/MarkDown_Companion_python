@@ -20,6 +20,7 @@ SAVE_DEBOUNCE_MS = 400
 class WindowManager(QObject):
     message = Signal(str, str)        # title, text  (user-facing problems)
     windows_changed = Signal()
+    home_requested = Signal()
 
     def __init__(self, files: FileManager, db: Database, settings: SettingsManager,
                  parent: QObject | None = None):
@@ -77,6 +78,7 @@ class WindowManager(QObject):
         win.close_requested.connect(self.close_window)
         win.state_changed.connect(self._mark_dirty)
         win.link_requested.connect(self.open_file)
+        win.home_requested.connect(self.home_requested)
         self._windows[key] = win
         self._db.set_open(key, True)
         win.show()
