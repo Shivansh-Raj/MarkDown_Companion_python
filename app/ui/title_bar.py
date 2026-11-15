@@ -1,11 +1,38 @@
 """Custom pixel-style title bar: drag area + compact / refresh / opacity / minimize / close."""
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QToolButton, QWidget
 
 HEIGHT = 26
+BTN_W, BTN_WIDE_W, BTN_H = 18, 38, 18
+
+
+class ElidedLabel(QLabel):
+    """Shrinks (with an ellipsis) instead of pushing its neighbours; the full text stays in the tooltip."""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None):
+        super().__init__(parent)
+        self._full = ""
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.setText(text)
+
+    def setText(self, text: str) -> None:  # noqa: N802
+        self._full = text
+        self._elide()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(0, super().minimumSizeHint().height())
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        self._elide()
+
+    def _elide(self) -> None:
+        shown = self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, max(self.width(), 0))
+        super().setText(shown if self.width() > 0 else self._full)
+        self.setToolTip(self._full if shown != self._full else "")
 
 
 class TitleBar(QWidget):
@@ -27,7 +54,7 @@ class TitleBar(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 2, 4, 2)
         lay.setSpacing(3)
-        self.title = QLabel(title)
+        self.title = ElidedLabel(title)
         self.title.setObjectName("title")
         lay.addWidget(self.title, 1)
         self.edit_btn = None
@@ -56,6 +83,7 @@ class TitleBar(QWidget):
         b.setToolTip(tip)
         b.setCursor(Qt.CursorShape.PointingHandCursor)
         b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        b.setFixedSize(BTN_WIDE_W if role == "wide" else BTN_W, BTN_H)   # never squeezed by the layout
         if role:
             b.setProperty("role", role)
         b.clicked.connect(signal)

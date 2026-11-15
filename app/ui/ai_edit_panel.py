@@ -3,14 +3,17 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QTextBlockFormat, QTextCharFormat, QTextCursor
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QGridLayout, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                               QRadioButton, QStackedWidget, QTextEdit, QVBoxLayout, QWidget)
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
+                               QRadioButton, QScrollArea, QStackedWidget, QTextEdit, QVBoxLayout, QWidget)
 
 from ..ai.diff import diff_lines, has_changes, with_context
 from ..ai.edit import (MAX_EDIT_CHARS, Scope, build_edited_document, list_sections, scope_text, system_prompt,
                        user_prompt)
 from ..ai.services import AiServices
+from ..markdown.theme import load_theme
 from ..ai.worker import StreamWorker
+from .flow_layout import FlowLayout
 from .typing_cat import TypingCat
 
 QUICK_ACTIONS = (
@@ -20,8 +23,16 @@ QUICK_ACTIONS = (
     ("Reorder by priority", "Reorder the items by priority, most important first."),
 )
 PAGE_INPUT, PAGE_RUN, PAGE_REVIEW = range(3)
-_ADD = (QColor("#12361f"), QColor("#b6f0c4"))
-_DEL = (QColor("#451a1d"), QColor("#ffc9c6"))
+# (background, text) for added / removed lines, per light or dark theme
+_DIFF = {
+    "dark": {"add": ("#12361f", "#b6f0c4"), "del": ("#451a1d", "#ffc9c6")},
+    "light": {"add": ("#d1f2d8", "#0b3d1a"), "del": ("#ffd7d5", "#5a0f0b")},
+}
+
+
+def _is_light(theme: dict) -> bool:
+    c = QColor(theme["bg"])
+    return (0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()) > 140
 
 
 class AiEditPanel(QWidget):
@@ -58,7 +69,7 @@ class AiEditPanel(QWidget):
 
     # pages -------------------------------------------------------------------------------------
     def _input_page(self) -> QWidget:
-        w = QWidget()
+        w = QWidget()                              # the form scrolls instead of being crushed in a short window
         lay = QVBoxLayout(w)
         lay.setContentsMargins(10, 8, 10, 8)
         title = QLabel("AI EDIT")
@@ -76,12 +87,13 @@ class AiEditPanel(QWidget):
         self.instruction = QPlainTextEdit()
         self.instruction.setObjectName("editor")
         self.instruction.setPlaceholderText("What should change? e.g. Add a rollback step")
-        self.instruction.setMaximumHeight(110)
-        chips = QGridLayout()                      # 2 x 2 so long labels are never cut off
-        for i, (label, text) in enumerate(QUICK_ACTIONS):
+        self.instruction.setMinimumHeight(72)
+        self.instruction.setMaximumHeight(130)
+        chips = FlowLayout(None, 0, 6, 6)          # wraps; long labels are never cut off
+        for label, text in QUICK_ACTIONS:
             b = QPushButton(label)
             b.clicked.connect(lambda _=False, t=text: self.instruction.setPlainText(t))
-            chips.addWidget(b, i // 2, i % 2)
+            chips.addWidget(b)
         self.history_box = QComboBox()
         self.history_box.activated.connect(self._pick_history)
         note = QLabel("Completed tasks stay completed. Nothing is saved until you press SAVE.")
@@ -92,10 +104,9 @@ class AiEditPanel(QWidget):
         self.go_btn.clicked.connect(self.start)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.close_panel)
-        row = QHBoxLayout()
+        row = FlowLayout(None, 0, 6, 6)
         row.addWidget(self.go_btn)
         row.addWidget(cancel)
-        row.addStretch(1)
         for x in (title, self.rb_sel, self.sel_preview, self.rb_sec, self.sec_box, self.rb_whole):
             lay.addWidget(x)
         lay.addWidget(self.instruction)
@@ -104,7 +115,13 @@ class AiEditPanel(QWidget):
         lay.addWidget(note)
         lay.addLayout(row)
         lay.addStretch(1)
-        return w
+        scroll = QScrollArea()
+        scroll.setObjectName("aiscroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(w)
+        return scroll
 
     def _run_page(self) -> QWidget:
         w = QWidget()
@@ -137,11 +154,10 @@ class AiEditPanel(QWidget):
         again.clicked.connect(lambda: self.stack.setCurrentIndex(PAGE_INPUT))
         discard = QPushButton("Discard")
         discard.clicked.connect(self.close_panel)
-        row = QHBoxLayout()
+        row = FlowLayout(None, 0, 6, 6)
         row.addWidget(self.apply_btn)
         row.addWidget(again)
         row.addWidget(discard)
-        row.addStretch(1)
         self.diff_view = QTextEdit()
         self.diff_view.setReadOnly(True)
         self.diff_view.setObjectName("editor")
@@ -220,6 +236,7 @@ class AiEditPanel(QWidget):
         self._run_source = self._source
         self.live.clear()
         self.run_label.setText("Editing file" if scope.kind == "whole" else "Editing selection")
+        self.cat.set_theme(self.ai.theme_name())
         self.cat.set_animated(self.ai.animations())
         self.cat.start()
         self.stack.setCurrentIndex(PAGE_RUN)
@@ -297,12 +314,14 @@ class AiEditPanel(QWidget):
         cur = QTextCursor(self.diff_view.document())
         cur.movePosition(QTextCursor.MoveOperation.End)
         block, char = QTextBlockFormat(), QTextCharFormat()
+        theme = load_theme(self.ai.theme_name())
+        colors = _DIFF["light" if _is_light(theme) else "dark"]
         if row.kind == "add":
-            sign, (bg, fg) = "+ ", _ADD
+            sign, (bg, fg) = "+ ", map(QColor, colors["add"])
         elif row.kind == "del":
-            sign, (bg, fg) = "− ", _DEL
+            sign, (bg, fg) = "\u2212 ", map(QColor, colors["del"])
         else:
-            sign, bg, fg = "  ", QColor(0, 0, 0, 0), QColor("#8a8a96")
+            sign, bg, fg = "  ", QColor(0, 0, 0, 0), QColor(theme["muted"])
         if row.kind in ("add", "del"):
             block.setBackground(bg)
             char.setForeground(fg)

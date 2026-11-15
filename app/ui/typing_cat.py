@@ -28,6 +28,10 @@ class TypingCat(QWidget):
     def stop(self) -> None:
         self._timer.stop()
 
+    def set_theme(self, theme: str) -> None:
+        self._t = load_theme(theme)
+        self.update()
+
     def set_animated(self, on: bool) -> None:
         self._animated = on
         if not on:

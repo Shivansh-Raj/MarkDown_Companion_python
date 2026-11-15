@@ -177,6 +177,7 @@ class AiCreateWindow(QDialog):
         self.save_btn.hide()
         self.discard_btn.hide()
         self.stack.setCurrentIndex(PAGE_RUN)
+        self.cat.set_theme(self.ai.theme_name())
         self.cat.set_animated(self.ai.animations())
         self.cat.show()
         self.cat.start()

@@ -48,3 +48,11 @@ def test_math_is_rendered_as_styled_span():
 
 def test_malformed_input_never_raises():
     assert r("\x00 [unclosed ](( ``` \n\n|||") is not None
+
+
+def test_retro_red_theme_is_available_and_complete():
+    from app.markdown.theme import chrome_qss, content_css, list_themes, load_theme
+    assert "retro_red" in list_themes()
+    t = load_theme("retro_red")
+    assert all(k in t for k in load_theme("retro"))          # same keys as the built-in theme
+    assert "--accent:#c23b35" in content_css("retro_red") and chrome_qss("retro_red")

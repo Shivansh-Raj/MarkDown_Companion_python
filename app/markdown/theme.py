@@ -66,7 +66,7 @@ QLabel#status { background: #5a2b2b; color: #ffd9d9; padding: 3px 8px; font-size
 QLabel#status[kind="info"] { background: %(bg_alt)s; color: %(accent2)s; border-bottom: 2px solid %(border)s; }
 QToolButton#tbtn { color: %(fg)s; background: %(bg)s; border: 2px solid %(border)s; min-width: 18px; max-width: 18px;
   min-height: 16px; max-height: 16px; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 11px; padding: 0; }
-QToolButton#tbtn[role="wide"] { min-width: 34px; max-width: 34px; }
+QToolButton#tbtn[role="wide"] { min-width: 38px; max-width: 38px; }
 QToolButton#tbtn:disabled { color: %(border)s; }
 QToolButton#tbtn:hover { border-color: %(accent)s; color: %(accent)s; }
 QToolButton#tbtn:pressed { background: %(border)s; }
@@ -79,7 +79,8 @@ QListWidget { background: %(code_bg)s; color: %(fg)s; border: 2px solid %(border
 QListWidget::item { padding: 5px 6px; } QListWidget::item:hover { background: %(bg_alt)s; }
 QListWidget::item:selected { background: %(accent)s; color: %(bg)s; }
 QWidget#editbar { background: %(bg_alt)s; border-bottom: 2px solid %(border)s; }
-QWidget#editbar QPushButton { padding: 2px 10px; font-weight: bold; }
+QWidget#editbar QPushButton { padding: 2px 8px; font-weight: bold; }
+QScrollArea#aiscroll, QScrollArea#aiscroll > QWidget > QWidget { background: transparent; border: 0; }
 QPlainTextEdit#editor { background: %(code_bg)s; color: %(fg)s; border: 0; padding: 8px; font-family: Consolas, Menlo, monospace;
   font-size: 13px; selection-background-color: %(accent)s; selection-color: %(bg)s; }
 QTextEdit#editor, QTextBrowser#preview { background: %(code_bg)s; color: %(fg)s; border: 2px solid %(border)s; padding: 6px;

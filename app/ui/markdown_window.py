@@ -11,11 +11,12 @@ from ..ai.edit import locate_selection, utf16_to_index
 from ..markdown.renderer import render_markdown
 from ..services.synchronization import ToggleStatus
 from .markdown_view import create_view
+from .flow_layout import FlowLayout
 from .title_bar import HEIGHT as TITLE_H, TitleBar
 
 EDGE = 6                      # resize/shadow margin around the frame
 CORNER = 14
-MIN_W, MIN_H = 240, 140
+MIN_W, MIN_H = 300, 140
 OPACITY_STEPS = (1.0, 0.85, 0.7, 0.55)
 DEFAULT_SIZE = (420, 520)
 _E = Qt.Edge
@@ -78,12 +79,12 @@ class MarkdownWindow(QWidget):
         self.editbar = QWidget()
         self.editbar.setObjectName("editbar")
         self.editbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        eb = QHBoxLayout(self.editbar)
+        eb = FlowLayout(self.editbar, 0, 6, 4)          # wraps onto a second row in a narrow window
         eb.setContentsMargins(8, 4, 8, 4)
         self.save_btn = QPushButton("SAVE")
         self.save_btn.setObjectName("primary")
         self.cancel_btn = QPushButton("CANCEL")
-        hint = QLabel("Editing source \u00b7 Ctrl+S saves \u00b7 Esc cancels")
+        hint = QLabel("Ctrl+S saves \u00b7 Esc cancels")
         hint.setObjectName("hint")
         self.undo_ai_btn = QPushButton("UNDO AI")
         self.undo_ai_btn.setToolTip("Undo the last AI edit")
@@ -92,7 +93,7 @@ class MarkdownWindow(QWidget):
         eb.addWidget(self.save_btn)
         eb.addWidget(self.cancel_btn)
         eb.addWidget(self.undo_ai_btn)
-        eb.addWidget(hint, 1)
+        eb.addWidget(hint)
         self.editbar.hide()
         self.editor = QPlainTextEdit()
         self.editor.setObjectName("editor")
