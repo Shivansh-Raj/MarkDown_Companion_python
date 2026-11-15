@@ -179,6 +179,7 @@ class AiCreateWindow(QDialog):
         self.stack.setCurrentIndex(PAGE_RUN)
         self.cat.set_theme(self.ai.theme_name())
         self.cat.set_animated(self.ai.animations())
+        self.cat.set_mood("typing")
         self.cat.show()
         self.cat.start()
         w = StreamWorker(key, build_system_prompt(self._doc_type()), prompt, self)
@@ -213,10 +214,11 @@ class AiCreateWindow(QDialog):
         if not body.strip():
             self._on_failed("The AI returned nothing. Try rephrasing your prompt.")
             return
-        self.cat.stop()
-        self.cat.hide()
         label = DOC_TYPE_LABELS.get(doc_type or "", "")
-        self.run_label.setText(f"DRAFT · {label.upper()}" if label else "DRAFT")
+        # the cat stays and asks whether to keep the draft, until the user decides
+        self.cat.set_mood("waiting")
+        self.cat.start()
+        self.run_label.setText(f"Draft ready ({label.lower()}). Keep it?" if label else "Draft ready. Keep it?")
         self.preview.setMarkdown(body)
         self.stop_btn.hide()
         self.save_btn.show()

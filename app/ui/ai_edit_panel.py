@@ -56,6 +56,7 @@ class AiEditPanel(QWidget):
         self.stack.addWidget(self._input_page())
         self.stack.addWidget(self._run_page())
         self.stack.addWidget(self._review_page())
+        self.stack.currentChanged.connect(self._page_changed)
         self.error = QLabel()
         self.error.setObjectName("status")
         self.error.setWordWrap(True)
@@ -162,9 +163,26 @@ class AiEditPanel(QWidget):
         self.diff_view.setReadOnly(True)
         self.diff_view.setObjectName("editor")
         self.diff_view.setFont(QFont("Consolas", 10))
+        wait = QHBoxLayout()
+        self.review_cat = TypingCat(self.ai.theme_name(), self.ai.animations(), "waiting")
+        self.review_label = QLabel("Looks right? Apply or discard")
+        self.review_label.setObjectName("section")
+        self.review_label.setWordWrap(True)
+        wait.addWidget(self.review_cat)
+        wait.addWidget(self.review_label, 1)
         lay.addLayout(row)
+        lay.addLayout(wait)
         lay.addWidget(self.diff_view, 1)
         return w
+
+    def _page_changed(self, index: int) -> None:
+        if index == PAGE_REVIEW:                   # the cat waits, asking whether to keep the edit
+            self.review_cat.set_theme(self.ai.theme_name())
+            self.review_cat.set_animated(self.ai.animations())
+            self.review_cat.set_mood("waiting")
+            self.review_cat.start()
+        else:
+            self.review_cat.stop()
 
     # opening -------------------------------------------------------------------------------------
     def open_for(self, source: str, selection: tuple[int, int] | None, version: int) -> None:
@@ -263,6 +281,7 @@ class AiEditPanel(QWidget):
         self._result = build_edited_document(self._run_source, self._run_scope, full)
         rows = with_context(diff_lines(self._run_source, self._result), 2)
         self.apply_btn.setEnabled(has_changes(rows))
+        self.review_label.setText("Looks right? Apply or discard" if has_changes(rows) else "The AI changed nothing")
         self._show_diff(rows)
         self.stack.setCurrentIndex(PAGE_REVIEW)
 

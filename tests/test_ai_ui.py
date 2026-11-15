@@ -138,7 +138,7 @@ def test_ai_create_flow_writes_new_file_and_emits_path(app, tmp_path, fake_groq)
     dlg.prompt.setPlainText("groceries for the week")
     dlg.generate()
     assert wait_for(lambda: dlg.save_btn.isVisibleTo(dlg) and dlg._worker is None)
-    assert dlg.run_label.text() == "DRAFT · TASK LIST"
+    assert dlg.run_label.text() == "Draft ready (task list). Keep it?"
     dlg.save()
     assert got and got[0].endswith("groceries.md")
     assert (tmp_path / "ai-files" / "groceries.md").read_text() == "# Groceries\n- [ ] milk\n"   # TYPE line stripped
@@ -179,3 +179,35 @@ def test_typing_cat_paints(qapp):
     cat._tick()
     assert not cat.grab().isNull()
     cat.stop()
+
+
+def test_cat_waits_with_a_question_mark_when_ai_is_done(app, md, fake_groq, tmp_path):
+    from app.ui.ai_create_window import AiCreateWindow
+    app.settings.set("animations", True)
+    # AI edit: review page
+    win = app.open_path(str(md("plan.md", DOC)))
+    panel = _run_edit(win)
+    assert panel.review_cat.mood == "waiting" and panel.review_cat.running
+    assert "Looks right" in panel.review_label.text()
+    assert not panel.review_cat.grab().isNull()
+    panel.stack.setCurrentIndex(0)                       # leaving the review page stops the animation
+    assert not panel.review_cat.running
+    # AI create: draft ready
+    fake_groq["output"] = "TYPE: plan\n\n# Launch\n- [ ] a\n"
+    dlg = AiCreateWindow(app.windows.ai)
+    dlg.prompt.setPlainText("launch")
+    dlg.generate()
+    assert wait_for(lambda: dlg.save_btn.isVisibleTo(dlg) and dlg._worker is None)
+    assert dlg.cat.mood == "waiting" and dlg.cat.running and not dlg.cat.isHidden()
+    assert dlg.run_label.text() == "Draft ready (plan). Keep it?"
+    dlg.show_start()                                     # discarding resets the cat
+    dlg.generate()
+    assert dlg.cat.mood == "typing"
+    assert wait_for(lambda: dlg._worker is None)
+
+
+def test_cat_is_static_but_shows_question_mark_when_animations_off(app):
+    from app.ui.typing_cat import TypingCat
+    cat = TypingCat("retro", animated=False, mood="waiting")
+    cat.start()
+    assert not cat.running and not cat.grab().isNull()
