@@ -11,7 +11,7 @@ import json
 import os
 from urllib.parse import unquote
 
-from PySide6.QtCore import QObject, QUrl, Signal, Qt
+from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Qt
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import QTextBrowser, QWidget
 
@@ -39,7 +39,11 @@ def _route_link(url: QUrl, owner) -> bool:
     if is_action_url(url):
         parts = [p for p in url.path().split("/") if p]
         if len(parts) == 3 and parts[0] == "toggle" and all(p.isdigit() for p in parts[1:]):
+            if getattr(owner, "toggle_busy", False):
+                return True     # a click is still being applied; this link carries stale state
             owner.toggle_requested.emit(int(parts[1]), bool(int(parts[2])))
+            if hasattr(owner, "mark_toggle_pending"):
+                owner.mark_toggle_pending()
         return True
     if scheme in ("http", "https", "mailto"):
         QDesktopServices.openUrl(url)
@@ -114,6 +118,7 @@ try:
             self.base_url = QUrl()
             self._loaded = False
             self._pending: str | None = None
+            self.toggle_busy = False
             self.setPage(_Page(self, self))
             self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
             self.page().loadFinished.connect(self._on_loaded)
@@ -131,10 +136,23 @@ try:
                 return
             self._inject(body_html)
 
+        def mark_toggle_pending(self) -> None:
+            """Ignore further checkbox clicks until the re-render lands (or 1.5 s pass).
+
+            The page is re-rendered asynchronously, so a fast second click would still carry
+            the old checked state and be rejected as a conflict.
+            """
+            self.toggle_busy = True
+            QTimer.singleShot(1500, self._clear_toggle_busy)
+
+        def _clear_toggle_busy(self) -> None:
+            self.toggle_busy = False
+
         def _inject(self, body_html: str) -> None:
             # Swapping innerHTML (not reloading the page) keeps the scroll position natively.
             self.page().runJavaScript(
-                f"document.getElementById({json.dumps(CONTENT_ID)}).innerHTML = {json.dumps(body_html)};")
+                f"document.getElementById({json.dumps(CONTENT_ID)}).innerHTML = {json.dumps(body_html)};",
+                lambda _r: self._clear_toggle_busy())
 
         def _on_loaded(self, ok: bool) -> None:
             self._loaded = ok
