@@ -155,7 +155,11 @@ try:
                 lambda _r: self._clear_toggle_busy())
 
         def _on_loaded(self, ok: bool) -> None:
-            self._loaded = ok
+            # Clicking an action link (navigation refused in acceptNavigationRequest) also fires
+            # loadFinished(False) on the already-loaded page. That must not mark the page unloaded,
+            # or every later refresh is queued forever and the view shows stale checkbox state.
+            if ok:
+                self._loaded = True
             if ok and self._pending is not None:
                 body, self._pending = self._pending, None
                 self._inject(body)
