@@ -23,6 +23,38 @@ DEFAULT_SIZE = (420, 520)
 _E = Qt.Edge
 
 
+class _ViewBox(QWidget):
+    """Hosts the content view without a layout so a heavy web view can be resized lazily.
+
+    A QWebEngineView reflows in a separate Chromium process, so resizing it on every drag step makes the
+    text lag and jump. While the window is being resized the view keeps its old size (clipped or padded
+    with the theme background) and snaps to the final size once the drag pauses.
+    """
+    DELAY = 150
+
+    def __init__(self, view: QWidget):
+        super().__init__()
+        self.setObjectName("viewbox")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.view = view
+        view.setParent(self)
+        self._lazy = hasattr(view, "page")                  # only the web view needs it
+        self._placed = False                                # first real size is applied immediately
+        self._timer = QTimer(self, singleShot=True, interval=self.DELAY)
+        self._timer.timeout.connect(self._fit)
+
+    def _fit(self) -> None:
+        self.view.setGeometry(self.rect())
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        if self._lazy and self._placed and self.isVisible():
+            self._timer.start()
+        else:
+            self._fit()
+            self._placed = self.width() > 50 and self.height() > 50
+
+
 class MarkdownWindow(QWidget):
     toggle_requested = Signal(str, int, bool)   # key, line, was_checked
     home_requested = Signal()
@@ -75,7 +107,7 @@ class MarkdownWindow(QWidget):
         self.status.setObjectName("status")
         self.status.setWordWrap(True)
         self.status.hide()
-        self.view = create_view(self.frame)
+        self.view = create_view()
 
         self.editbar = QWidget()
         self.editbar.setObjectName("editbar")
@@ -122,7 +154,8 @@ class MarkdownWindow(QWidget):
         lay.addWidget(self.progress)
         lay.addWidget(self.status)
         lay.addWidget(self.editbar)
-        lay.addWidget(self.view, 1)
+        self.view_box = _ViewBox(self.view)
+        lay.addWidget(self.view_box, 1)
         lay.addWidget(self.editor, 1)
 
         self._status_timer = QTimer(self, singleShot=True, interval=6000)
@@ -227,7 +260,7 @@ class MarkdownWindow(QWidget):
         self._editing = True
         self._ai_undo = []
         self.clear_status()
-        self.view.hide()
+        self.view_box.hide()
         self.editbar.show()
         self.editor.show()
         self.cancel_btn.setText("CANCEL")
@@ -247,7 +280,7 @@ class MarkdownWindow(QWidget):
         self._confirm_discard = False
         self.editor.hide()
         self.editbar.hide()
-        self.view.show()
+        self.view_box.show()
         self.title_bar.set_editing(False, self._available)
         if self._pending_text is not None:
             text, self._pending_text = self._pending_text, None
@@ -297,7 +330,7 @@ class MarkdownWindow(QWidget):
         self.ai_panel.hide()
         self.ai_panel.applied.connect(self._on_ai_applied)
         self.ai_panel.closed.connect(self.close_ai)
-        self.frame.layout().insertWidget(self.frame.layout().indexOf(self.view), self.ai_panel, 1)
+        self.frame.layout().insertWidget(self.frame.layout().indexOf(self.view_box), self.ai_panel, 1)
         QShortcut(QKeySequence("Escape"), self.ai_panel, activated=self._ai_escape,
                   context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
 
@@ -334,7 +367,7 @@ class MarkdownWindow(QWidget):
         self._ai_open = on
         self.ai_panel.setVisible(on)
         if on:
-            self.view.hide()
+            self.view_box.hide()
             self.editor.hide()
             self.editbar.hide()
         elif self._editing:
@@ -342,7 +375,7 @@ class MarkdownWindow(QWidget):
             self.editor.show()
             self.editor.setFocus()
         else:
-            self.view.setVisible(not self._compact)
+            self.view_box.setVisible(not self._compact)
 
     def close_ai(self) -> None:
         if self._ai_open:
@@ -393,7 +426,7 @@ class MarkdownWindow(QWidget):
             self._expanded_h = self.height()
             h = TITLE_H + 2 * EDGE + 4
             self._compact = True
-            self.view.hide()
+            self.view_box.hide()
             self.progress.hide()
             self.status.hide()
             self.setFixedHeight(h)
@@ -401,7 +434,7 @@ class MarkdownWindow(QWidget):
             self._compact = False
             self.setMinimumHeight(TITLE_H + 2 * EDGE + 4)
             self.setMaximumHeight(16777215)
-            self.view.show()
+            self.view_box.show()
             self.progress.setVisible(self._has_tasks)
             self.status.setVisible(bool(self.status.text()))
             self.resize(self.width(), max(self._expanded_h, MIN_H))
