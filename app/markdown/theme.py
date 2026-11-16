@@ -106,6 +106,12 @@ QListWidget { background: %(code_bg)s; color: %(fg)s; outline: 0; font-family: C
   border-top: 3px solid %(shadow)s; border-left: 3px solid %(shadow)s; border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
 QListWidget::item { padding: 6px 8px; border-bottom: 1px dashed %(border)s; } QListWidget::item:hover { background: %(bg_alt)s; }
 QListWidget::item:selected { background: %(accent)s; color: %(accent_ink)s; }
+QWidget#progress { background: %(bg)s; border-bottom: 3px solid %(border_hi)s; }
+QProgressBar#taskbar { background: %(code_bg)s; border-top: 3px solid %(shadow)s; border-left: 3px solid %(shadow)s;
+  border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
+QProgressBar#taskbar::chunk { background: %(accent)s; }
+QProgressBar#taskbar[complete="true"]::chunk { background: %(accent2)s; }
+QLabel#progresslabel { color: %(fg)s; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 11px; }
 QWidget#editbar { background: %(bg_alt)s; border-bottom: 3px solid %(border_hi)s; }
 QPlainTextEdit#editor { background: %(code_bg)s; color: %(fg)s; border: 0; padding: 8px; font-family: Consolas, Menlo, monospace;
   font-size: 13px; selection-background-color: %(accent)s; selection-color: %(accent_ink)s; }

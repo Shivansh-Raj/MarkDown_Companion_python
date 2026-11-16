@@ -5,9 +5,10 @@ import os
 
 from PySide6.QtCore import QPoint, QTimer, Qt, Signal
 from PySide6.QtGui import QCursor, QKeySequence, QMouseEvent, QShortcut
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton, QVBoxLayout,
+                               QWidget)
 
-from ..ai.edit import locate_selection, utf16_to_index
+from ..ai.edit import locate_selection, task_counts, utf16_to_index
 from ..markdown.renderer import render_markdown
 from ..services.synchronization import ToggleStatus
 from .markdown_view import create_view
@@ -100,7 +101,25 @@ class MarkdownWindow(QWidget):
         self.editor.setTabStopDistance(28)
         self.editor.hide()
 
+        self.progress = QWidget()                    # task progress, like V1: done/total checkboxes
+        self.progress.setObjectName("progress")
+        self.progress.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        pl = QHBoxLayout(self.progress)
+        pl.setContentsMargins(10, 5, 10, 5)
+        pl.setSpacing(8)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("taskbar")
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(14)
+        self.progress_label = QLabel()
+        self.progress_label.setObjectName("progresslabel")
+        pl.addWidget(self.progress_bar, 1)
+        pl.addWidget(self.progress_label)
+        self.progress.hide()
+        self._has_tasks = False
+
         lay.addWidget(self.title_bar)
+        lay.addWidget(self.progress)
         lay.addWidget(self.status)
         lay.addWidget(self.editbar)
         lay.addWidget(self.view, 1)
@@ -132,12 +151,27 @@ class MarkdownWindow(QWidget):
             self.set_compact(True)
 
     # content -------------------------------------------------------------------
+    def _update_progress(self) -> None:
+        done, total = task_counts(self._source)
+        self._has_tasks = total > 0
+        self.progress_bar.setRange(0, max(total, 1))
+        self.progress_bar.setValue(done)
+        self.progress_label.setText(f"{done}/{total} completed")
+        complete = total > 0 and done == total
+        if self.progress_bar.property("complete") != complete:
+            self.progress_bar.setProperty("complete", complete)
+            self.progress_bar.style().unpolish(self.progress_bar)
+            self.progress_bar.style().polish(self.progress_bar)
+        self.progress.setVisible(self._has_tasks and not self._compact)
+
     def load_markdown(self, text: str) -> None:
         self._source = text.lstrip("\ufeff")
+        self._update_progress()
         self.view.set_content(render_markdown(text), self.theme, os.path.dirname(self.path))
 
     def update_markdown(self, text: str) -> None:
         self._source = text.lstrip("\ufeff")
+        self._update_progress()
         self._ext_version += 1
         if self.ai_panel is not None:
             self.ai_panel.note_external_change(self._ext_version)
@@ -360,6 +394,7 @@ class MarkdownWindow(QWidget):
             h = TITLE_H + 2 * EDGE + 4
             self._compact = True
             self.view.hide()
+            self.progress.hide()
             self.status.hide()
             self.setFixedHeight(h)
         else:
@@ -367,6 +402,7 @@ class MarkdownWindow(QWidget):
             self.setMinimumHeight(TITLE_H + 2 * EDGE + 4)
             self.setMaximumHeight(16777215)
             self.view.show()
+            self.progress.setVisible(self._has_tasks)
             self.status.setVisible(bool(self.status.text()))
             self.resize(self.width(), max(self._expanded_h, MIN_H))
         self.title_bar.set_compact(self._compact)

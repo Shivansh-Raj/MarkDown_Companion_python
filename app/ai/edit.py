@@ -98,6 +98,12 @@ def scope_text(source: str, scope: Scope) -> str:
     return source[start:end]
 
 
+def task_counts(text: str) -> tuple[int, int]:
+    """(done, total) task checkboxes in `text`, ignoring code fences."""
+    tasks = _tasks(text)
+    return sum(1 for _, checked, _ in tasks if checked), len(tasks)
+
+
 def _tasks(text: str) -> list[tuple[int, bool, str]]:
     """(line index, checked, task text) for every task line outside code fences."""
     out, fence = [], None

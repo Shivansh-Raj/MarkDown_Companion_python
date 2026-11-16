@@ -92,3 +92,10 @@ def test_diff_marks_changes_and_collapses_context():
     collapsed = with_context(rows, 1)
     assert collapsed[0].kind == "gap" and collapsed[0].hidden == 3 and has_changes(rows)
     assert not has_changes(diff_lines("x", "x"))
+
+
+def test_task_counts_ignore_code_fences():
+    from app.ai.edit import task_counts
+    text = "- [x] a\n- [ ] b\n```\n- [ ] c\n```\n1. [X] d\n"
+    assert task_counts(text) == (2, 3)
+    assert task_counts("# no tasks\n") == (0, 0)
