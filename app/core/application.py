@@ -84,8 +84,8 @@ class CompanionApp(QObject):
 
     def start(self, show_home: bool = True) -> None:
         self.qapp.setStyleSheet(chrome_qss(self.settings.get("theme")))
-        self.button_fx = ButtonFx(self.settings.get("theme"))      # V1-style outline + hard offset shadow
-        self.qapp.installEventFilter(self.button_fx)
+        self.button_fx = ButtonFx(self.settings.get("theme"), self.qapp.style().name())  # V1-style button outline
+        self.qapp.setStyle(self.button_fx)
         if self.tray and not self.tray.show():
             log.warning("system tray not available")
         self._register_shortcuts()
