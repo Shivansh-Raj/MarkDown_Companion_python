@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem
 
 from .markdown_window import CORNER, EDGE
 from .pixel_icon import app_icon
+from .pixel_stage import PixelStage
 from .title_bar import TitleBar
 
 MD_EXT = (".md", ".markdown", ".mdown", ".txt")
@@ -51,11 +52,11 @@ class HomeWindow(QWidget):
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
-        self.setMinimumSize(400, 500)
+        self.setMinimumSize(400, 580)
         self.setWindowTitle("Markdown Companion V2")
         self.setWindowIcon(app_icon())
         self.setAcceptDrops(True)
-        self.resize(480, 600)
+        self.resize(480, 680)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(EDGE, EDGE, EDGE, EDGE)
@@ -82,18 +83,20 @@ class HomeWindow(QWidget):
         hero = QLabel("MARKDOWN\nCOMPANION")
         hero.setObjectName("hero")
         glow = QGraphicsDropShadowEffect(hero)           # hard pixel drop shadow under the title
-        glow.setOffset(3, 3)
+        glow.setOffset(2, 2)
         glow.setBlurRadius(0)
-        glow.setColor(QColor(0, 0, 0, 150))
+        glow.setColor(QColor(0, 0, 0, 70))
         hero.setGraphicsEffect(glow)
         tagline = QLabel("\u25aa NOTES \u25aa TASKS \u25aa AI \u25aa")
+        self.tagline = tagline
         tagline.setObjectName("tagline")
+        self.stage = PixelStage(self._settings)
         self.hint = QLabel()
         self.hint.setObjectName("hint")
         self.hint.setWordWrap(True)
         root.addWidget(hero)
         root.addWidget(tagline)
-        root.addSpacing(4)
+        root.addWidget(self.stage)
         root.addWidget(self.hint)
 
         self.open_btn = QPushButton("\u25b6  Open file\u2026")
