@@ -70,21 +70,16 @@ QLabel#status[kind="info"] { background: %(bg_alt)s; color: %(accent2)s; border-
 
 /* ---- 3D buttons: bevelled with a hard shadow edge; the bevel flips when pressed ---- */
 QToolButton#tbtn { color: %(fg)s; background: %(bg)s; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 11px; padding: 0;
-  border-top: 2px solid %(border_hi)s; border-left: 2px solid %(border_hi)s;
-  border-right: 3px solid %(shadow)s; border-bottom: 3px solid %(shadow)s; }
+  border: 2px solid %(border_hi)s; }
 QToolButton#tbtn:hover { background: %(code_bg)s; color: %(accent)s; }
-QToolButton#tbtn:pressed { border-top: 3px solid %(shadow)s; border-left: 3px solid %(shadow)s;
-  border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; background: %(bg_alt)s; }
+QToolButton#tbtn:pressed { background: %(bg_alt)s; }
 QToolButton#tbtn:disabled { color: %(border)s; }
 QToolButton#tbtn[role="close"]:hover { background: #8a3b3b; color: white; }
 QPushButton { background: %(bg_alt)s; color: %(fg)s; padding: 4px 12px; font-weight: bold;
-  border-top: 2px solid %(border_hi)s; border-left: 2px solid %(border_hi)s;
-  border-right: 4px solid %(shadow)s; border-bottom: 4px solid %(shadow)s; }
+  border: 2px solid %(border_hi)s; }
 QPushButton:hover { background: %(code_bg)s; color: %(accent)s; }
-QPushButton:pressed { background: %(bg)s; border-top: 4px solid %(shadow)s; border-left: 4px solid %(shadow)s;
-  border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
-QPushButton:disabled { color: %(muted)s; background: %(bg)s; border-top-color: %(border)s; border-left-color: %(border)s;
-  border-right-color: %(border)s; border-bottom-color: %(border)s; }
+QPushButton:pressed { background: %(bg)s; }
+QPushButton:disabled { color: %(muted)s; background: %(bg)s; border-color: %(border)s; }
 QPushButton#primary { background: %(accent)s; color: %(accent_ink)s; padding: 6px 14px; }
 QPushButton#primary:hover { background: %(accent)s; color: %(accent_ink)s; border-top-color: %(accent_ink)s; border-left-color: %(accent_ink)s; }
 QPushButton#primary:pressed { background: %(accent)s; }
@@ -94,8 +89,8 @@ QWidget#editbar QPushButton { padding: 2px 8px; }
 /* ---- bars, panels, lists ---- */
 QWidget#home { background: %(bg)s; }
 QWidget#home QPushButton { font-size: 13px; letter-spacing: 1px; }
-QWidget#home QPushButton#primary { font-size: 15px; letter-spacing: 2px; border-right-width: 5px; border-bottom-width: 5px; }
-QWidget#home QPushButton#primary:pressed { background: %(accent)s; border-top-width: 5px; border-left-width: 5px; border-right-width: 2px; border-bottom-width: 2px; }
+QWidget#home QPushButton#primary { font-size: 15px; letter-spacing: 2px; }
+QWidget#home QPushButton#primary:pressed { background: %(accent)s; }
 QLabel#tagline { color: %(accent2)s; font-family: Consolas, Menlo, monospace; font-size: 11px; letter-spacing: 3px; }
 QLabel#hero { padding-bottom: 0; }
 QWidget#footbar { border-top: 3px double %(border)s; }
@@ -132,7 +127,7 @@ QDialog QLabel, QCheckBox, QRadioButton { color: %(fg)s; }
 QLineEdit, QKeySequenceEdit { background: %(code_bg)s; color: %(fg)s; padding: 4px 6px; selection-background-color: %(accent)s; selection-color: %(accent_ink)s;
   border-top: 3px solid %(shadow)s; border-left: 3px solid %(shadow)s; border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
 QComboBox { background: %(bg_alt)s; color: %(fg)s; padding: 3px 8px; font-weight: bold;
-  border-top: 2px solid %(border_hi)s; border-left: 2px solid %(border_hi)s; border-right: 3px solid %(shadow)s; border-bottom: 3px solid %(shadow)s; }
+  border: 2px solid %(border_hi)s; }
 QComboBox QAbstractItemView { background: %(code_bg)s; color: %(fg)s; border: 2px solid %(border_hi)s; selection-background-color: %(accent)s; selection-color: %(accent_ink)s; }
 QCheckBox::indicator, QRadioButton::indicator { width: 14px; height: 14px; background: %(code_bg)s; border: 2px solid %(border_hi)s; }
 QCheckBox::indicator:checked, QRadioButton::indicator:checked { background: %(accent)s; border: 2px solid %(border_hi)s; }

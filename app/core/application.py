@@ -8,6 +8,7 @@ from PySide6.QtCore import QLockFile, QObject, QProcess, Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..markdown.theme import chrome_qss
+from ..ui.button_fx import ButtonFx
 from ..services.persistence import Database
 from ..ui.ai_create_window import AiCreateWindow
 from ..ui.file_picker import pick_markdown_file
@@ -83,6 +84,8 @@ class CompanionApp(QObject):
 
     def start(self, show_home: bool = True) -> None:
         self.qapp.setStyleSheet(chrome_qss(self.settings.get("theme")))
+        self.button_fx = ButtonFx(self.settings.get("theme"))      # V1-style outline + hard offset shadow
+        self.qapp.installEventFilter(self.button_fx)
         if self.tray and not self.tray.show():
             log.warning("system tray not available")
         self._register_shortcuts()
@@ -153,6 +156,8 @@ class CompanionApp(QObject):
         elif key == "theme":
             theme = self.settings.get("theme")
             self.qapp.setStyleSheet(chrome_qss(theme))
+            if getattr(self, "button_fx", None):
+                self.button_fx.set_theme(theme)
             self.windows.apply_theme(theme)
 
     def _on_shortcut(self, action: str) -> None:
