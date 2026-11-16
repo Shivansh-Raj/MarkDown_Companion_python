@@ -5,7 +5,7 @@ import os
 
 from PySide6.QtCore import QPoint, QTimer, Qt, Signal
 from PySide6.QtGui import QCursor, QKeySequence, QMouseEvent, QShortcut
-from PySide6.QtWidgets import (QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton,
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton,
                                QVBoxLayout, QWidget)
 
 from ..ai.edit import locate_selection, task_counts, utf16_to_index
@@ -46,8 +46,6 @@ class MarkdownWindow(QWidget):
         self._pending_text: str | None = None   # newer disk content queued while editing
         self._expanded_h = DEFAULT_SIZE[1]
         self._source = ""                        # latest file text shown (for AI edit)
-        self._fx_timer = None
-        self._fx_off = False
         self._ext_version = 0                    # bumped whenever the file changes underneath us
         self._ai_services = None
         self.ai_panel = None
@@ -445,25 +443,8 @@ class MarkdownWindow(QWidget):
         super().moveEvent(e)
         self.state_changed.emit(self.key)
 
-    def _fx_pause(self) -> None:
-        """Button shadow effects re-render off-screen on every resize step, which makes live resizing
-        lag over the web view. Switch them off while the size is changing, then restore them."""
-        if self._fx_timer is None:
-            self._fx_timer = QTimer(self, singleShot=True, interval=180)
-            self._fx_timer.timeout.connect(lambda: self._fx_set(True))
-        if not self._fx_off:
-            self._fx_set(False)
-        self._fx_timer.start()
-
-    def _fx_set(self, on: bool) -> None:
-        self._fx_off = not on
-        for fx in self.findChildren(QGraphicsDropShadowEffect):
-            fx.setEnabled(on)
-
     def resizeEvent(self, e) -> None:  # noqa: N802
         super().resizeEvent(e)
-        if self.isVisible():
-            self._fx_pause()
         if not self._compact:
             self._expanded_h = self.height()
         self.state_changed.emit(self.key)

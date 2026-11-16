@@ -9,7 +9,7 @@ import weakref
 
 from PySide6.QtCore import QEvent, QObject
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QAbstractButton, QGraphicsDropShadowEffect, QProxyStyle, QPushButton, QToolButton
+from PySide6.QtWidgets import QAbstractButton, QApplication, QGraphicsDropShadowEffect, QProxyStyle, QPushButton, QToolButton
 
 from ..markdown.theme import load_theme
 
@@ -32,8 +32,9 @@ class _Press(QObject):
 class ButtonFx(QProxyStyle):
     """Style wrapper: `polish()` runs once per widget, so there is no per-event overhead."""
 
-    def __init__(self, theme: str, base: str | None = None):
+    def __init__(self, theme: str, base: str | None = None, enabled: bool = True):
         super().__init__(base)
+        self._on = enabled
         self._color = QColor(load_theme(theme)["shadow"])
         self._effects: "weakref.WeakSet[QGraphicsDropShadowEffect]" = weakref.WeakSet()
         self._press = _Press()
@@ -43,8 +44,22 @@ class ButtonFx(QProxyStyle):
         for fx in list(self._effects):
             fx.setColor(self._color)
 
+    def set_enabled(self, on: bool) -> None:
+        """Turn the shadows on/off for every existing button (new buttons follow `_on`)."""
+        self._on = on
+        for w in QApplication.allWidgets():
+            if isinstance(w, (QPushButton, QToolButton)):
+                if on:
+                    self._attach(w)
+                elif isinstance(w.graphicsEffect(), QGraphicsDropShadowEffect):
+                    w.setGraphicsEffect(None)
+
     def polish(self, widget) -> None:
         super().polish(widget)
+        if self._on:
+            self._attach(widget)
+
+    def _attach(self, widget) -> None:
         if isinstance(widget, (QPushButton, QToolButton)) and widget.graphicsEffect() is None:
             fx = QGraphicsDropShadowEffect(widget)
             fx.setBlurRadius(0)

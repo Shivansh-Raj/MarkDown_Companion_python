@@ -139,7 +139,24 @@ QSlider::handle:horizontal { background: %(bg_alt)s; width: 12px; margin: -6px 0
 """
 
 
-def chrome_qss(theme_id: str) -> str:
+# classic bevelled buttons (thick shadow edge, flipped when pressed); appended when V1-style borders are off
+_BEVEL = """
+QToolButton#tbtn { border-top: 2px solid %(border_hi)s; border-left: 2px solid %(border_hi)s;
+  border-right: 3px solid %(shadow)s; border-bottom: 3px solid %(shadow)s; }
+QToolButton#tbtn:pressed { border-top: 3px solid %(shadow)s; border-left: 3px solid %(shadow)s;
+  border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
+QPushButton { border-top: 2px solid %(border_hi)s; border-left: 2px solid %(border_hi)s;
+  border-right: 4px solid %(shadow)s; border-bottom: 4px solid %(shadow)s; }
+QPushButton:pressed { border-top: 4px solid %(shadow)s; border-left: 4px solid %(shadow)s;
+  border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
+QPushButton:disabled { border-color: %(border)s; }
+QWidget#home QPushButton#primary { border-right-width: 5px; border-bottom-width: 5px; }
+QWidget#home QPushButton#primary:pressed { border-top-width: 5px; border-left-width: 5px; border-right-width: 2px; border-bottom-width: 2px; }
+QComboBox { border-top: 2px solid %(border_hi)s; border-left: 2px solid %(border_hi)s; border-right: 3px solid %(shadow)s; border-bottom: 3px solid %(shadow)s; }
+"""
+
+
+def chrome_qss(theme_id: str, v1_borders: bool = False) -> str:
     t = load_theme(theme_id)
     def mix(a: str, b: str, k: float) -> str:
         ca, cb = QColor(a), QColor(b)
@@ -147,4 +164,4 @@ def chrome_qss(theme_id: str) -> str:
                         zip((ca.red(), ca.green(), ca.blue()), (cb.red(), cb.green(), cb.blue())))).name()
     extra = {"acc_hi": mix(t["accent"], "#ffffff", 0.28), "acc_lo": mix(t["accent"], "#000000", 0.22),
              "alt_hi": mix(t["bg_alt"], "#ffffff", 0.10), "bg_hi": mix(t["bg"], "#ffffff", 0.06)}
-    return _QSS % {"accent_ink": t["bg"], **extra, **t}        # text on accent colour defaults to the background
+    return (_QSS if v1_borders else _QSS + _BEVEL) % {"accent_ink": t["bg"], **extra, **t}        # text on accent colour defaults to the background

@@ -65,7 +65,10 @@ class SettingsWindow(QDialog):
         self.restore.setChecked(settings.get("restore_windows"))
         self.show_home = QCheckBox("Show the home screen at startup")
         self.show_home.setChecked(settings.get("show_home"))
+        self.button_shadow = QCheckBox("V1-style button borders (outline + shadow)")
+        self.button_shadow.setChecked(settings.get("button_shadow"))
         form.addRow("", self.show_home)
+        form.addRow("", self.button_shadow)
         form.addRow("", self.compact)
         form.addRow("", self.restore)
 
@@ -182,6 +185,7 @@ class SettingsWindow(QDialog):
         s.set("compact_default", self.compact.isChecked())
         s.set("restore_windows", self.restore.isChecked())
         s.set("show_home", self.show_home.isChecked())
+        s.set("button_shadow", self.button_shadow.isChecked())
         s.set("shortcut_primary", _seq_text(self.primary))
         s.set("shortcut_home", _seq_text(self.home_seq))
         s.set("shortcut_picker", _seq_text(self.picker))

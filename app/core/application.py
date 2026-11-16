@@ -83,8 +83,9 @@ class CompanionApp(QObject):
         return False
 
     def start(self, show_home: bool = True) -> None:
-        self.qapp.setStyleSheet(chrome_qss(self.settings.get("theme")))
-        self.button_fx = ButtonFx(self.settings.get("theme"), self.qapp.style().name())  # V1-style button outline
+        v1 = bool(self.settings.get("button_shadow"))
+        self.qapp.setStyleSheet(chrome_qss(self.settings.get("theme"), v1))
+        self.button_fx = ButtonFx(self.settings.get("theme"), self.qapp.style().name(), v1)  # V1-style button outline
         self.qapp.setStyle(self.button_fx)
         if self.tray and not self.tray.show():
             log.warning("system tray not available")
@@ -153,11 +154,12 @@ class CompanionApp(QObject):
     def _on_setting_changed(self, key: str) -> None:
         if key in ("shortcut_primary", "shortcut_picker", "shortcut_home"):
             self._register_shortcuts()
-        elif key == "theme":
-            theme = self.settings.get("theme")
-            self.qapp.setStyleSheet(chrome_qss(theme))
+        elif key in ("theme", "button_shadow"):
+            theme, v1 = self.settings.get("theme"), bool(self.settings.get("button_shadow"))
+            self.qapp.setStyleSheet(chrome_qss(theme, v1))
             if getattr(self, "button_fx", None):
                 self.button_fx.set_theme(theme)
+                self.button_fx.set_enabled(v1)
             self.windows.apply_theme(theme)
 
     def _on_shortcut(self, action: str) -> None:
