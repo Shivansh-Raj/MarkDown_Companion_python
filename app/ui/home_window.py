@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem
 from .markdown_window import CORNER, EDGE
 from .pixel_icon import app_icon
 from .pixel_stage import PixelStage
+from .typing_cat import TypingCat
 from .title_bar import TitleBar
 
 MD_EXT = (".md", ".markdown", ".mdown", ".txt")
@@ -117,6 +118,16 @@ class HomeWindow(QWidget):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ai_btn.setMinimumWidth(150)                 # asymmetric 3D borders can make Qt's size hint too small
         settings_btn.setMinimumWidth(110)
+        anim = self._settings.get("animations") is not False
+        self.cat = TypingCat(self._settings.get("theme") or "retro", anim, scale=2, crop_top=8)
+        cat_row = QHBoxLayout()                          # the cat sits right on top of the Open button
+        cat_row.setContentsMargins(0, 0, 0, 0)
+        cat_row.addStretch(1)
+        cat_row.addWidget(self.cat)
+        cat_row.addSpacing(18)
+        root.addSpacing(-4)
+        root.addLayout(cat_row)
+        root.addSpacing(-12)
         root.addWidget(self.open_btn)                    # the main action gets its own full-width row
         row = QHBoxLayout()
         row.setSpacing(10)
@@ -222,11 +233,13 @@ class HomeWindow(QWidget):
 
     def hideEvent(self, e) -> None:  # noqa: N802
         self._blink.stop()
+        self.cat.stop()
         super().hideEvent(e)
 
     def showEvent(self, e) -> None:  # noqa: N802
         if self._settings.get("animations") is not False:
             self._blink.start()
+            self.cat.start()
         self.refresh()
         super().showEvent(e)
 

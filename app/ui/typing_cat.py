@@ -21,13 +21,15 @@ POP_FRAMES = 4
 
 
 class TypingCat(QWidget):
-    def __init__(self, theme: str = "retro", animated: bool = True, mood: str = "typing", parent=None):
+    def __init__(self, theme: str = "retro", animated: bool = True, mood: str = "typing", parent=None, scale: int = SCALE,
+                 crop_top: int = 0):
         super().__init__(parent)
         self._t = load_theme(theme)
         self._animated = animated
         self._mood = mood
         self._frame = 0
-        self.setFixedSize(QSize(GRID_W * SCALE, GRID_H * SCALE))
+        self._scale, self._crop = scale, crop_top      # crop_top: drop the empty "?" headroom rows
+        self.setFixedSize(QSize(GRID_W * scale, (GRID_H - crop_top) * scale))
         self._timer = QTimer(self, interval=125)
         self._timer.timeout.connect(self._tick)
 
@@ -71,7 +73,8 @@ class TypingCat(QWidget):
     def paintEvent(self, _e) -> None:  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        p.scale(SCALE, SCALE)
+        p.scale(self._scale, self._scale)
+        p.translate(0, -self._crop)
         t, waiting, anim = self._t, self._mood == "waiting", self._animated
 
         def rect(x, y, w, h, color):
