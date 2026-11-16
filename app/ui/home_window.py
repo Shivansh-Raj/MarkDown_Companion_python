@@ -4,9 +4,9 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
+from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton,
-                               QVBoxLayout, QWidget)
+                               QVBoxLayout, QWidget, QGraphicsDropShadowEffect)
 
 from .markdown_window import CORNER, EDGE
 from .pixel_icon import app_icon
@@ -68,21 +68,36 @@ class HomeWindow(QWidget):
 
         hero = QLabel("MARKDOWN\nCOMPANION")
         hero.setObjectName("hero")
+        glow = QGraphicsDropShadowEffect(hero)           # hard pixel drop shadow under the title
+        glow.setOffset(3, 3)
+        glow.setBlurRadius(0)
+        glow.setColor(QColor(0, 0, 0, 120))
+        hero.setGraphicsEffect(glow)
+        tagline = QLabel("\u25aa NOTES \u25aa TASKS \u25aa AI \u25aa")
+        tagline.setObjectName("tagline")
         self.hint = QLabel()
         self.hint.setObjectName("hint")
         self.hint.setWordWrap(True)
         root.addWidget(hero)
+        root.addWidget(tagline)
+        root.addSpacing(4)
         root.addWidget(self.hint)
 
         self.open_btn = QPushButton("\u25b6  Open file\u2026")
         self.open_btn.setObjectName("primary")
+        self.open_btn.setMinimumHeight(48)
         self.open_btn.clicked.connect(self.open_dialog_requested)
         self.ai_btn = QPushButton("\u270e  New with AI")
         self.ai_btn.clicked.connect(self.ai_create_requested)
         settings_btn = QPushButton("Settings")
         settings_btn.clicked.connect(self.settings_requested)
         for b in (self.open_btn, self.ai_btn, settings_btn):
-            b.setMinimumHeight(40)
+            b.setMinimumHeight(max(40, b.minimumHeight()))
+            sh = QGraphicsDropShadowEffect(b)
+            sh.setOffset(0, 3)
+            sh.setBlurRadius(10)
+            sh.setColor(QColor(0, 0, 0, 90))
+            b.setGraphicsEffect(sh)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ai_btn.setMinimumWidth(150)                 # asymmetric 3D borders can make Qt's size hint too small
         settings_btn.setMinimumWidth(110)
@@ -111,7 +126,11 @@ class HomeWindow(QWidget):
         self.recent_list.customContextMenuRequested.connect(self._recent_menu)
         root.addWidget(self.recent_list, 3)
 
-        foot = QHBoxLayout()
+        foot_w = QWidget()
+        foot_w.setObjectName("footbar")
+        foot_w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        foot = QHBoxLayout(foot_w)
+        foot.setContentsMargins(0, 8, 0, 0)
         self.footer = QLabel("Closing this window keeps the app running in the tray.")
         self.footer.setObjectName("hint")
         self.footer.setWordWrap(True)
@@ -119,7 +138,7 @@ class HomeWindow(QWidget):
         quit_btn.clicked.connect(self.exit_requested)
         foot.addWidget(self.footer, 1)
         foot.addWidget(quit_btn)
-        root.addLayout(foot)
+        root.addWidget(foot_w)
 
         wm_signal = getattr(window_manager, "windows_changed", None)
         if wm_signal is not None:

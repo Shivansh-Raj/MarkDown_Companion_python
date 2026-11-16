@@ -4,6 +4,8 @@ Adding a theme = dropping a new JSON file next to retro.json.
 """
 from __future__ import annotations
 
+from PySide6.QtGui import QColor
+
 import base64
 import json
 from functools import lru_cache
@@ -90,7 +92,16 @@ QPushButton#primary:disabled { background: %(bg_alt)s; color: %(muted)s; }
 QWidget#editbar QPushButton { padding: 2px 8px; }
 
 /* ---- bars, panels, lists ---- */
-QWidget#home { background: %(bg)s; }
+QWidget#home { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(bg_hi)s, stop:1 %(bg)s); }
+QWidget#home QPushButton { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(alt_hi)s, stop:1 %(bg_alt)s); font-size: 13px; letter-spacing: 1px; }
+QWidget#home QPushButton:hover { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(code_bg)s, stop:1 %(alt_hi)s); }
+QWidget#home QPushButton:pressed { background: %(bg)s; }
+QWidget#home QPushButton#primary { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(acc_hi)s, stop:0.5 %(accent)s, stop:1 %(acc_lo)s); font-size: 15px; letter-spacing: 2px; }
+QWidget#home QPushButton#primary:hover { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(acc_hi)s, stop:1 %(accent)s); }
+QWidget#home QPushButton#primary:pressed { background: %(acc_lo)s; }
+QLabel#tagline { color: %(accent2)s; font-family: Consolas, Menlo, monospace; font-size: 11px; letter-spacing: 3px; }
+QLabel#hero { padding-bottom: 0; }
+QWidget#footbar { border-top: 3px double %(border)s; }
 QLabel#hero { color: %(accent)s; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 26px; letter-spacing: 3px; }
 QLabel#hint { color: %(muted)s; font-size: 11px; } QLabel#hint[warn="true"] { color: #ff9b6b; }
 QLabel#section { color: %(accent2)s; font-weight: bold; font-size: 11px; letter-spacing: 2px; margin-top: 6px; border-bottom: 3px double %(border)s; padding-bottom: 3px; }
@@ -132,4 +143,10 @@ QSlider::handle:horizontal { background: %(bg_alt)s; width: 12px; margin: -6px 0
 
 def chrome_qss(theme_id: str) -> str:
     t = load_theme(theme_id)
-    return _QSS % {"accent_ink": t["bg"], **t}        # text on accent colour defaults to the background
+    def mix(a: str, b: str, k: float) -> str:
+        ca, cb = QColor(a), QColor(b)
+        return QColor(*(round(x + (y - x) * k) for x, y in
+                        zip((ca.red(), ca.green(), ca.blue()), (cb.red(), cb.green(), cb.blue())))).name()
+    extra = {"acc_hi": mix(t["accent"], "#ffffff", 0.28), "acc_lo": mix(t["accent"], "#000000", 0.22),
+             "alt_hi": mix(t["bg_alt"], "#ffffff", 0.10), "bg_hi": mix(t["bg"], "#ffffff", 0.06)}
+    return _QSS % {"accent_ink": t["bg"], **extra, **t}        # text on accent colour defaults to the background
