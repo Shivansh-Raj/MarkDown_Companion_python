@@ -52,6 +52,16 @@ class SettingsWindow(QDialog):
         self.opacity.setRange(30, 100)
         self.opacity.setValue(int(settings.get("opacity") * 100))
         form.addRow("Default opacity:", self.opacity)
+        self.font_scale = QSlider(Qt.Orientation.Horizontal)
+        self.font_scale.setRange(60, 200)
+        self.font_scale.setSingleStep(10)
+        self.font_scale.setValue(int(settings.get("font_scale")))
+        self._font_label = QLabel(f"{self.font_scale.value()}%")
+        self.font_scale.valueChanged.connect(lambda v: self._font_label.setText(f"{v}%"))
+        frow = QHBoxLayout()
+        frow.addWidget(self.font_scale, 1)
+        frow.addWidget(self._font_label)
+        form.addRow("Text size:", frow)
 
         self.theme = QComboBox()
         for tid, name in list_themes().items():
@@ -181,6 +191,7 @@ class SettingsWindow(QDialog):
     def apply(self) -> None:
         s = self.settings
         s.set("opacity", self.opacity.value() / 100)
+        s.set("font_scale", self.font_scale.value())
         s.set("theme", self.theme.currentData())
         s.set("compact_default", self.compact.isChecked())
         s.set("restore_windows", self.restore.isChecked())

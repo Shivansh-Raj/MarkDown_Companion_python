@@ -154,6 +154,8 @@ class CompanionApp(QObject):
     def _on_setting_changed(self, key: str) -> None:
         if key in ("shortcut_primary", "shortcut_picker", "shortcut_home"):
             self._register_shortcuts()
+        elif key == "font_scale":
+            self.windows.apply_font_scale(self.settings.get("font_scale"))
         elif key in ("theme", "button_shadow"):
             theme, v1 = self.settings.get("theme"), bool(self.settings.get("button_shadow"))
             self.qapp.setStyleSheet(chrome_qss(theme, v1))

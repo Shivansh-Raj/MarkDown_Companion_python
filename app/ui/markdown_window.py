@@ -184,6 +184,9 @@ class MarkdownWindow(QWidget):
             self.set_compact(True)
 
     # content -------------------------------------------------------------------
+    def set_font_scale(self, percent: int) -> None:
+        self.view.set_zoom(percent / 100)
+
     def _update_progress(self) -> None:
         done, total = task_counts(self._source)
         self._has_tasks = total > 0

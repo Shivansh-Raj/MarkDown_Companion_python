@@ -18,6 +18,7 @@ DEFAULTS: dict[str, Any] = {
     "restore_windows": False,             # reopen last session's windows on startup
     "last_dir": "",
     "button_shadow": False,               # V1-style outline + offset shadow on buttons (off = classic bevel)
+    "font_scale": 100,                    # text size of the Markdown view, percent
     "show_home": True,                    # show the home screen on startup
     "ai_save_dir": "",                    # where AI-created files go ("" = ~/Documents/MarkdownCompanion)
     "ai_history": [],                     # recent AI-edit instructions, newest first
@@ -38,7 +39,7 @@ def _valid_history(v: Any) -> list[str]:
 
 _VALIDATORS = {
     "ai_save_dir": str, "groq_api_key": str, "animations": bool, "ai_history": _valid_history,
-    "opacity": _valid_opacity,
+    "opacity": _valid_opacity, "font_scale": lambda v: min(200, max(60, int(v))),
     "compact_default": bool,
     "show_home": bool, "button_shadow": bool,
     "restore_windows": bool,

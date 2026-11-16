@@ -67,6 +67,13 @@ class FallbackMarkdownView(QTextBrowser):
         self.setOpenLinks(False)
         self.setFrameShape(QTextBrowser.Shape.NoFrame)
         self.anchorClicked.connect(lambda url: _route_link(url, self))
+        self._base_pt = self.font().pointSizeF()
+
+    def set_zoom(self, factor: float) -> None:
+        f = self.font()
+        f.setPointSizeF(self._base_pt * factor)
+        self.setFont(f)
+        self.document().setDefaultFont(f)
 
     def set_content(self, body_html: str, theme_id: str, base_dir: str) -> None:
         t = load_theme(theme_id)
@@ -132,6 +139,9 @@ try:
             self.base_url = QUrl.fromLocalFile(os.path.join(base_dir, ""))
             self.page().setBackgroundColor(QColor(load_theme(theme_id)["bg"]))
             self.setHtml(build_page(body_html, theme_id), self.base_url)
+
+        def set_zoom(self, factor: float) -> None:
+            self.setZoomFactor(factor)
 
         def selected_text(self) -> str:
             return self.selectedText().replace("\u2029", "\n")

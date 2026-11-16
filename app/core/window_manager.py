@@ -72,6 +72,7 @@ class WindowManager(QObject):
         compact = bool(saved.get("compact", self._settings.get("compact_default")))
         win = MarkdownWindow(key, path, theme, opacity, False)
         win.set_ai_services(self.ai)
+        win.set_font_scale(self._settings.get("font_scale"))
         self._apply_geometry(win, saved)
         if compact:
             win.set_compact(True)
@@ -124,6 +125,10 @@ class WindowManager(QObject):
                 self.open_file(row["path"])
             else:
                 self._db.set_open(row["key"], False)
+
+    def apply_font_scale(self, percent: int) -> None:
+        for win in self._windows.values():
+            win.set_font_scale(percent)
 
     def apply_theme(self, theme: str) -> None:
         for key, win in self._windows.items():
