@@ -196,6 +196,8 @@ class HomeWindow(QWidget):
         self.hint.style().polish(self.hint)
 
     def refresh(self) -> None:
+        self.cat.set_theme(self._settings.get("theme") or "retro")
+        self.stage.update()
         self._update_hint()
         self.windows_list.clear()
         for w in self._wm.windows():

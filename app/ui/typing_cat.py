@@ -80,9 +80,14 @@ class TypingCat(QWidget):
         def rect(x, y, w, h, color):
             p.fillRect(QRectF(x, y + TOP, w, h), QColor(color))
 
-        fill, edge, ink, accent, muted = t["bg_alt"], t["border_hi"], t["fg"], t["accent"], t["muted"]
+        ink, accent, muted = t["fg"], t["accent"], t["muted"]
+        light = QColor(t["bg"]).lightness() > 128
+        fill = t["code_bg"] if light else t["bg_alt"]        # on light themes use the lightest tone so fur != background
+        edge = ink                                           # full dark outline keeps the cat readable on any theme
         rect(9, 3, 3, 4, fill); rect(20, 3, 3, 4, fill); rect(8, 6, 16, 10, fill)       # ears + head
         rect(9, 3, 3, 1, edge); rect(20, 3, 3, 1, edge)
+        rect(9, 3, 1, 4, edge); rect(11, 3, 1, 3, edge); rect(20, 3, 1, 3, edge); rect(22, 3, 1, 4, edge)
+        rect(12, 6, 8, 1, edge)                                                          # head top
         rect(8, 6, 1, 10, edge); rect(23, 6, 1, 10, edge); rect(9, 15, 14, 1, edge)
 
         blink = anim and self._frame % 40 in (38, 39)
