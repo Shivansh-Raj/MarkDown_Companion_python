@@ -92,13 +92,10 @@ QPushButton#primary:disabled { background: %(bg_alt)s; color: %(muted)s; }
 QWidget#editbar QPushButton { padding: 2px 8px; }
 
 /* ---- bars, panels, lists ---- */
-QWidget#home { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(bg_hi)s, stop:1 %(bg)s); }
-QWidget#home QPushButton { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(alt_hi)s, stop:1 %(bg_alt)s); font-size: 13px; letter-spacing: 1px; }
-QWidget#home QPushButton:hover { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(code_bg)s, stop:1 %(alt_hi)s); }
-QWidget#home QPushButton:pressed { background: %(bg)s; }
-QWidget#home QPushButton#primary { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(acc_hi)s, stop:0.5 %(accent)s, stop:1 %(acc_lo)s); font-size: 15px; letter-spacing: 2px; }
-QWidget#home QPushButton#primary:hover { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %(acc_hi)s, stop:1 %(accent)s); }
-QWidget#home QPushButton#primary:pressed { background: %(acc_lo)s; }
+QWidget#home { background: %(bg)s; }
+QWidget#home QPushButton { font-size: 13px; letter-spacing: 1px; }
+QWidget#home QPushButton#primary { font-size: 15px; letter-spacing: 2px; border-right-width: 5px; border-bottom-width: 5px; }
+QWidget#home QPushButton#primary:pressed { background: %(accent)s; border-top-width: 5px; border-left-width: 5px; border-right-width: 2px; border-bottom-width: 2px; }
 QLabel#tagline { color: %(accent2)s; font-family: Consolas, Menlo, monospace; font-size: 11px; letter-spacing: 3px; }
 QLabel#hero { padding-bottom: 0; }
 QWidget#footbar { border-top: 3px double %(border)s; }

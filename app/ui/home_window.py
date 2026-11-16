@@ -4,9 +4,9 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QMouseEvent
+from PySide6.QtGui import QColor, QDragEnterEvent, QPainter, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton,
-                               QVBoxLayout, QWidget, QGraphicsDropShadowEffect)
+                               QVBoxLayout, QWidget, QGraphicsDropShadowEffect, QStyle, QStyleOption)
 
 from .markdown_window import CORNER, EDGE
 from .pixel_icon import app_icon
@@ -17,6 +17,19 @@ _KEY = Qt.ItemDataRole.UserRole
 
 
 _E = Qt.Edge
+
+
+class _Crt(QWidget):
+    """Body panel with faint CRT scanlines painted over the themed background."""
+
+    def paintEvent(self, e) -> None:  # noqa: N802
+        opt = QStyleOption()
+        opt.initFrom(self)
+        p = QPainter(self)
+        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
+        p.setPen(QColor(0, 0, 0, 28))
+        for y in range(0, self.height(), 3):
+            p.drawLine(0, y, self.width(), y)
 
 
 class HomeWindow(QWidget):
@@ -57,7 +70,7 @@ class HomeWindow(QWidget):
         self.title_bar.minimize_clicked.connect(self.showMinimized)
         self.title_bar.close_clicked.connect(self.hide)     # app keeps running in the tray
         fl.addWidget(self.title_bar)
-        body = QWidget()
+        body = _Crt()
         body.setObjectName("home")
         body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         fl.addWidget(body, 1)
@@ -71,7 +84,7 @@ class HomeWindow(QWidget):
         glow = QGraphicsDropShadowEffect(hero)           # hard pixel drop shadow under the title
         glow.setOffset(3, 3)
         glow.setBlurRadius(0)
-        glow.setColor(QColor(0, 0, 0, 120))
+        glow.setColor(QColor(0, 0, 0, 150))
         hero.setGraphicsEffect(glow)
         tagline = QLabel("\u25aa NOTES \u25aa TASKS \u25aa AI \u25aa")
         tagline.setObjectName("tagline")
@@ -93,11 +106,6 @@ class HomeWindow(QWidget):
         settings_btn.clicked.connect(self.settings_requested)
         for b in (self.open_btn, self.ai_btn, settings_btn):
             b.setMinimumHeight(max(40, b.minimumHeight()))
-            sh = QGraphicsDropShadowEffect(b)
-            sh.setOffset(0, 3)
-            sh.setBlurRadius(10)
-            sh.setColor(QColor(0, 0, 0, 90))
-            b.setGraphicsEffect(sh)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ai_btn.setMinimumWidth(150)                 # asymmetric 3D borders can make Qt's size hint too small
         settings_btn.setMinimumWidth(110)
