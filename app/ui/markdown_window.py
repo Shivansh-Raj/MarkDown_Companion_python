@@ -24,11 +24,11 @@ _E = Qt.Edge
 
 
 class _ViewBox(QWidget):
-    """Hosts the content view without a layout so a heavy web view can be resized lazily.
+    """Hosts the content view without a layout so a heavy web view stays out of the resize path.
 
-    A QWebEngineView reflows in a separate Chromium process, so resizing it on every drag step makes the
-    text lag and jump. While the window is being resized the view keeps its old size (clipped or padded
-    with the theme background) and snaps to the final size once the drag pauses.
+    A QWebEngineView lives in its own Chromium process and composites natively, which makes the whole
+    window (title bar, progress bar, text) stutter while dragging a corner. When a resize starts the view is
+    swapped for a static snapshot of itself; once the drag pauses it is shown again at the final size.
     """
     DELAY = 150
 
@@ -40,18 +40,39 @@ class _ViewBox(QWidget):
         view.setParent(self)
         self._lazy = hasattr(view, "page")                  # only the web view needs it
         self._placed = False                                # first real size is applied immediately
+        self._frozen = False
+        self._snap = QLabel(self)                           # static picture shown while dragging
+        self._snap.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self._snap.hide()
         self._timer = QTimer(self, singleShot=True, interval=self.DELAY)
-        self._timer.timeout.connect(self._fit)
+        self._timer.timeout.connect(self._thaw)
 
-    def _fit(self) -> None:
+    def _freeze(self) -> None:
+        if self._frozen or not self.view.isVisible():
+            return
+        pix = self.view.grab()
+        self._frozen = True
+        if not pix.isNull():
+            self._snap.setPixmap(pix)
+            self._snap.setGeometry(0, 0, pix.width(), pix.height())
+            self._snap.show()
+        self.view.hide()
+
+    def _thaw(self) -> None:
         self.view.setGeometry(self.rect())
+        if self._frozen:
+            self._frozen = False
+            self.view.show()
+            self._snap.hide()
+            self._snap.clear()
 
     def resizeEvent(self, e) -> None:  # noqa: N802
         super().resizeEvent(e)
         if self._lazy and self._placed and self.isVisible():
+            self._freeze()
             self._timer.start()
         else:
-            self._fit()
+            self.view.setGeometry(self.rect())
             self._placed = self.width() > 50 and self.height() > 50
 
 

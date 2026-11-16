@@ -31,8 +31,12 @@ class ElidedLabel(QLabel):
 
     def _elide(self) -> None:
         shown = self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, max(self.width(), 0))
-        super().setText(shown if self.width() > 0 else self._full)
-        self.setToolTip(self._full if shown != self._full else "")
+        shown = shown if self.width() > 0 else self._full
+        if shown != self.text():                      # avoid a repaint/relayout on every resize step
+            super().setText(shown)
+        tip = self._full if shown != self._full else ""
+        if tip != self.toolTip():
+            self.setToolTip(tip)
 
 
 class TitleBar(QWidget):
