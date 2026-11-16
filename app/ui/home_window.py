@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtCore import QPoint, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QDragEnterEvent, QPainter, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton,
                                QVBoxLayout, QWidget, QGraphicsDropShadowEffect, QStyle, QStyleOption)
@@ -34,6 +34,7 @@ class _Crt(QWidget):
 
 
 class HomeWindow(QWidget):
+    _TAG = "\u25aa NOTES \u25aa TASKS \u25aa AI \u25aa"
     open_dialog_requested = Signal()
     open_path_requested = Signal(str)
     focus_requested = Signal(str)       # window key
@@ -87,10 +88,14 @@ class HomeWindow(QWidget):
         glow.setBlurRadius(0)
         glow.setColor(QColor(0, 0, 0, 70))
         hero.setGraphicsEffect(glow)
-        tagline = QLabel("\u25aa NOTES \u25aa TASKS \u25aa AI \u25aa")
+        tagline = QLabel(self._TAG + "  ")
         self.tagline = tagline
         tagline.setObjectName("tagline")
         self.stage = PixelStage(self._settings)
+        self._cursor_on = False                          # blinking block cursor after the tagline
+        self._blink = QTimer(self)
+        self._blink.setInterval(550)
+        self._blink.timeout.connect(self._toggle_cursor)
         self.hint = QLabel()
         self.hint.setObjectName("hint")
         self.hint.setWordWrap(True)
@@ -211,7 +216,17 @@ class HomeWindow(QWidget):
         it.setFlags(Qt.ItemFlag.NoItemFlags)
         lst.addItem(it)
 
+    def _toggle_cursor(self) -> None:
+        self._cursor_on = not self._cursor_on
+        self.tagline.setText(self._TAG + (" \u2588" if self._cursor_on else "  "))
+
+    def hideEvent(self, e) -> None:  # noqa: N802
+        self._blink.stop()
+        super().hideEvent(e)
+
     def showEvent(self, e) -> None:  # noqa: N802
+        if self._settings.get("animations") is not False:
+            self._blink.start()
         self.refresh()
         super().showEvent(e)
 

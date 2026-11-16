@@ -12,6 +12,10 @@ from ..markdown.theme import load_theme
 _INV = (("00100000100", "00010001000", "00111111100", "01101110110", "11111111111", "10111111101", "10100000101", "00011011000"),
         ("00100000100", "10010001001", "10111111101", "11101110111", "11111111111", "01111111110", "00100000100", "01000000010"))
 _SHIP = ("000010000", "000111000", "000111000", "111111111", "111111111")
+_COIN = (("0011100", "0111110", "1111111", "1111111", "1111111", "0111110", "0011100"),
+         ("0001000", "0011100", "0011100", "0011100", "0011100", "0011100", "0001000"),
+         ("0011100", "0110110", "1101011", "1101011", "1101011", "0110110", "0011100"),
+         ("0001000", "0011100", "0011100", "0011100", "0011100", "0011100", "0001000"))
 _S = 2                     # screen pixels per sprite pixel
 _COLS, _ROWS = 5, 1
 
@@ -71,6 +75,17 @@ class PixelStage(QWidget):
         for x, y, sz in self._stars:                       # twinkling parallax stars
             c = QColor(fg if (self._tick // 6 + int(y)) % 5 == 0 else dim)
             p.fillRect(int(x * w), int(y), sz, sz, c)
+        coin = QColor(t["accent2"])
+        coin.setAlpha(170)                                 # slow spinning coin in the corner
+        cs = _COIN[(self._tick // 4) % 4]
+        self._sprite(p, cs, w - 7 * _S - 10, 6 + (1 if (self._tick // 10) % 2 else 0), coin)
+        k = self._tick % 90                                # an occasional shooting star
+        if k < 14:
+            sx, sy = int(w * 0.55) - k * 9, 4 + k * 2
+            for i in range(5):
+                a = QColor(fg)
+                a.setAlpha(150 - i * 30)
+                p.fillRect(sx + i * 4, sy - i * 2, 2, 2, a)
         frame = (self._tick // 5) % 2
         fx = self._fleet_x()
         for r in range(_ROWS):
