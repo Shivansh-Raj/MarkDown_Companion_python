@@ -46,9 +46,31 @@ def test_conversation_shows_verified_quotes_and_warns_when_none_match():
              ask.Turn("Who owns it?", ask.NOT_FOUND, []),
              ask.Turn("Anything?", "Groq request failed", error=True)]
     md = ask.conversation_markdown(turns, "And then?", "Streaming…")
-    assert '> “Book the venue for March 14”' in md and "invented" not in md          # unverified quotes are never shown
+    assert "**Quotes from the file**" in md and "- *“Book the venue for March 14”*" in md and "invented" not in md   # unverified never shown
     assert md.count("No exact quote could be matched") == 1 and "**PROBLEM**" in md
-    assert md.count("\n> ") == 1                                                      # each quote is its own blockquote
     two = ask.conversation_markdown([ask.Turn("q", "a", [("one", True), ("two", True)])])
-    assert "> “one”\n\n> “two”" in two
+    assert "- *“one”*\n- *“two”*" in two                                              # quotes are a real Markdown bullet list
     assert md.count("**YOU**") == 5 and "Streaming…" in md and "Reading the file" in ask.conversation_markdown([], "q", "")
+
+
+import pytest
+
+
+@pytest.mark.parametrize("label", ["SOURCES:", "Sources:", "**Sources:**", "**SOURCES**:", "### Sources", "Source:", "- **Sources:**", "> Sources:"])
+def test_every_common_sources_heading_is_split_off_the_answer(label):
+    raw = f'The venue is not booked yet.\n\n{label}\n- "Book the venue for March 14"\n* *"Owner: Priya"*\n1. “Launch plan”'
+    answer, sources = ask.parse_answer(raw, DOC)
+    assert answer == "The venue is not booked yet."                       # none of the quote lines stay in the answer
+    assert sources == [("Book the venue for March 14", True), ("Owner: Priya", True), ("Launch plan", True)]
+
+
+def test_a_quote_on_the_same_line_as_the_label_is_handled_and_plain_answers_are_untouched():
+    answer, sources = ask.parse_answer('Priya.\nSource: "Owner: Priya"', DOC)
+    assert answer == "Priya." and sources == [("Owner: Priya", True)]
+    text = "Resources and sourcing matter.\n- the sources of truth are in the plan"
+    assert ask.parse_answer(text, DOC) == (text, [])                      # the word inside a sentence is not a label
+
+
+def test_the_streaming_view_hides_the_sources_block_whatever_its_heading():
+    assert ask.answer_part("Book the venue.\n\n**Sources:**\n- \"Book") == "Book the venue."
+    assert ask.answer_part("Still typing the answer") == "Still typing the answer"

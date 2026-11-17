@@ -55,7 +55,7 @@ def test_answers_show_only_quotes_found_in_the_file(ctx):
     ask(p, "What is left?")
     text = p.log.toPlainText()
     assert "YOU" in text and "What is left?" in text and "FILE SAYS" in text and "The venue is not booked yet." in text
-    assert "“Book the venue for March 14”" in text                    # verified quote shown
+    assert "Quotes from the file" in text and "“Book the venue for March 14”" in text      # verified quote shown
     assert "$5000" not in text                                         # invented quote never shown
     assert "Book the venue for March 14" in state["calls"][0] and "Question: What is left?" in state["calls"][0]
     assert path.read_text() == DOC                                     # asking never changes the file

@@ -1,8 +1,6 @@
 """Ask AI about the open file: answers come only from the file, with quotes you can check."""
 from __future__ import annotations
 
-import re
-
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget
 
@@ -169,7 +167,7 @@ class AskPanel(QWidget):
         w.start()
 
     def _on_text(self, full: str) -> None:
-        self._live = re.sub(r"\n?\s*SOURCES:[\s\S]*$", "", full, flags=re.I)
+        self._live = ask.answer_part(full)
         self._render()
 
     def _on_done(self, raw: str) -> None:

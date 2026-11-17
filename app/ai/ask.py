@@ -1,6 +1,7 @@
 """Ask a question about one Markdown file; the answer must come from the file itself (port of V1's aiAsk.ts)."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from ..voice.coach import in_transcript, squash
@@ -40,16 +41,26 @@ def build_user_prompt(question: str, history: list[Turn], doc: str) -> str:
     return f'{"Earlier in this conversation:" + chr(10) + prior + chr(10) + chr(10) if prior else ""}Document:\n"""\n{doc}\n"""\n\nQuestion: {question}'
 
 
+# A "sources" label at the start of a line, in any of the shapes models produce: SOURCES:, **Sources:**, ### Sources, Source: "..."
+_LABEL = re.compile(r"^[ \t#>*_-]*(?:sources?|quotes?|references?|citations?)[ \t*_]*(?::[ \t*_]*|$)", re.I | re.M)
+
+
+def answer_part(raw: str) -> str:
+    """The reply without its sources block (used while the answer is still streaming)."""
+    m = _LABEL.search(raw)
+    return (raw[:m.start()] if m else raw).strip()
+
+
 def parse_answer(raw: str, doc: str) -> tuple[str, list[tuple[str, bool]]]:
     """Split the reply into the answer and its sources, marking which quotes really appear in the file."""
-    import re
-    m = re.search(r"\n?\s*SOURCES:\s*", raw, re.I)
+    m = _LABEL.search(raw)
     answer = (raw[:m.start()] if m else raw).strip()
     tail = raw[m.end():] if m else ""
     squashed = squash(doc)
     sources: list[tuple[str, bool]] = []
     for line in tail.split("\n"):
-        mm = re.match(r"^\s*[-*]?\s*[\"“”']?(.+?)[\"“”']?\s*$", line)
+        # strip list markers, numbering, blockquote marks, emphasis and the quotation marks around the quote
+        mm = re.match(r"^[ \t>*_-]*(?:\d+[.)][ \t]+)?[ \t*_]*[\"“”']?(.+?)[\"“”']?[ \t*_]*$", line)
         quote = mm.group(1).strip() if mm else ""
         if len(quote) < 3 or any(q == quote for q, _ in sources):
             continue
@@ -71,8 +82,7 @@ def conversation_markdown(turns: list[Turn], live_question: str | None = None, l
         if not t.error and not is_not_found(t.answer):
             verified = [q for q, ok in (t.sources or []) if ok]
             if verified:
-                for q in verified:
-                    out += [f"> “{q}”", ""]                       # one blockquote each: consecutive lines would merge
+                out += ["**Quotes from the file**", "", *[f"- *“{q}”*" for q in verified], ""]
             else:
                 out += ["_No exact quote could be matched in the file, so double-check this answer._", ""]
     if live_question is not None:
