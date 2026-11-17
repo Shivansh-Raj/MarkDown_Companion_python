@@ -9,25 +9,31 @@ from ..ai.create import (DOC_TYPE_LABELS, build_system_prompt, split_type_line, 
                          write_new_file)
 from ..ai.services import AiServices
 from ..ai.worker import StreamWorker
+from .chrome import EdgeResize, build_chrome, chrome_flags
 from .fonts import use_body_font
+from .pixel_icon import app_icon
 from .rich import set_markdown, style_browser
 from .typing_cat import TypingCat
 
 PAGE_KEY, PAGE_PROMPT, PAGE_RUN = range(3)
 
 
-class AiCreateWindow(QDialog):
+class AiCreateWindow(EdgeResize, QDialog):
     created = Signal(str)       # absolute path of the new file
 
     def __init__(self, ai: AiServices):
-        super().__init__()
+        super().__init__(None, chrome_flags(dialog=True))   # same frame as the note and home windows: no OS title bar
         self.ai = ai
         self._worker: StreamWorker | None = None
         self._raw = ""
         self.setWindowTitle("Markdown Companion V2 - New file with AI")
-        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setWindowIcon(app_icon())
         use_body_font(self, 12)                     # same text look as the Markdown view (and follows the Text size setting)
         self.setMinimumSize(460, 520)
+        self.resize(500, 580)
+        self.title_bar, root = build_chrome(self, "NEW WITH AI")
+        self.title_bar.minimize_clicked.connect(lambda: self.showMinimized())
+        self.title_bar.close_clicked.connect(self.close)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self._key_page())
@@ -37,7 +43,6 @@ class AiCreateWindow(QDialog):
         self.error.setObjectName("status")
         self.error.setWordWrap(True)
         self.error.hide()
-        root = QVBoxLayout(self)
         root.addWidget(self.stack, 1)
         root.addWidget(self.error)
         self.show_start()
