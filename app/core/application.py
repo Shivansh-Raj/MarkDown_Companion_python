@@ -114,6 +114,8 @@ class CompanionApp(QObject):
         self.voice.shutdown()                       # finalise an in-progress recording
         if self._voice_win is not None:             # closing only hides it, so destroy it explicitly on quit
             self._voice_win.analysis.stop()
+            self._voice_win.practice.stop()
+            self._voice_win.questions.stop()
             self._voice_win.hide()
             self._voice_win.deleteLater()
             self._voice_win = None

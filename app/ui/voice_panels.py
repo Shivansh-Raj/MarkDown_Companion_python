@@ -6,7 +6,7 @@ import re
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QPainter
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QPushButton, QRadioButton, QScrollArea, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
@@ -16,8 +16,10 @@ from ..markdown.theme import load_theme
 from ..voice import analyses as an
 from ..voice import analytics as ana
 from ..voice import coach as co
+from ..voice import followups as fu
 from ..voice import export, session, templates as tpl
-from ..voice.transcript import format_clock, suggest_file_name
+from ..services.synchronization import read_snapshot
+from ..voice.transcript import date_stamp, format_clock, suggest_file_name, transcript_text, word_count
 
 
 class ExportDialog(QDialog):
@@ -259,6 +261,9 @@ class AnalysisPanel(QWidget):
             setattr(self, f"{t}_copy", copy)
             setattr(self, f"{t}_regen", regen)
             self.tabs.addTab(tab, an.ANALYSIS_LABELS[t])
+        self.followups = FollowUpPanel(svc, ai, db, sync)             # earlier meetings' action items vs. this meeting
+        self.followups.file_created.connect(self.file_created)
+        self.tabs.addTab(self.followups, "Follow-ups")
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -279,6 +284,7 @@ class AnalysisPanel(QWidget):
             return
         self.stop()
         self._session_id = meta.id
+        self.followups.set_session(meta)
         loaded = []
         for d in session.list_analyses(self.svc.root, meta.id):
             try:
@@ -305,6 +311,7 @@ class AnalysisPanel(QWidget):
         return bool(an.timed_transcript(self.svc.chunks)) and self.svc.pending == 0
 
     def refresh(self) -> None:
+        self.followups.refresh()
         running = self._worker is not None or bool(self._todo)
         self.generate_btn.setEnabled(self.ready and not running)
         self.generate_btn.setVisible(not running)
@@ -384,6 +391,7 @@ class AnalysisPanel(QWidget):
         self._next()
 
     def stop(self) -> None:
+        self.followups.stop()
         self._todo.clear()
         if self._worker is not None:
             self._worker.cancel()
@@ -783,3 +791,371 @@ class PracticePanel(QWidget):
         self._dialog = ExportDialog(self.svc.meta, self.sections(), "presentation feedback", self.ai, self.db, self.sync, self)
         self._dialog.file_created.connect(self.file_created)
         self._dialog.show()
+
+
+class FollowUpPanel(QWidget):
+    """Compares earlier meetings' action items with this meeting. Checkbox state comes from the user's real Markdown files;
+    nothing is ticked or edited, and a repeated mention never counts as "unfinished" by itself."""
+    file_created = Signal(str)
+    MAX_MEETINGS, MAX_ITEMS, MAX_FILES = 8, 25, 80
+
+    def __init__(self, svc, ai, db, sync, parent=None):
+        super().__init__(parent)
+        self.svc, self.ai, self.db, self.sync = svc, ai, db, sync
+        self.report: fu.FollowUpReport | None = None
+        self._session_id: str | None = None
+        self._worker: StreamWorker | None = None
+        self._steps: list[str] = []
+        self._step: str | None = None
+        self._busy = False
+        self._dialog: ExportDialog | None = None
+
+        note = QLabel("Compares earlier action items with this meeting. It reads your Markdown files for each item's real checkbox. "
+                      "Nothing is ticked or changed.")
+        note.setObjectName("hint")
+        note.setWordWrap(True)
+        self.check_btn = QPushButton("Check previous meetings")
+        self.check_btn.clicked.connect(lambda: self.run(False))
+        self.rethink_btn = QPushButton("↻ Rethink")
+        self.rethink_btn.setToolTip("Not satisfied? Ask the AI to reconsider more strictly")
+        self.rethink_btn.clicked.connect(lambda: self.run(True))
+        self.stop_btn = QPushButton("■  Stop")
+        self.stop_btn.clicked.connect(self.stop)
+        self.export_btn = QPushButton("Export as Markdown…")
+        self.export_btn.clicked.connect(self.export)
+        self.status = QLabel()
+        self.status.setObjectName("hint")
+        self.error = QLabel()
+        self.error.setObjectName("status")
+        self.error.setWordWrap(True)
+        self.error.hide()
+        self.view = QTextBrowser()
+        self.view.setObjectName("preview")
+        self.view.setOpenLinks(False)
+        row = QHBoxLayout()
+        for b in (self.check_btn, self.rethink_btn, self.stop_btn, self.export_btn):
+            row.addWidget(b)
+        row.addWidget(self.status, 1)
+        lay = QVBoxLayout(self)
+        lay.addWidget(note)
+        lay.addLayout(row)
+        lay.addWidget(self.error)
+        lay.addWidget(self.view, 1)
+        self.refresh()
+
+    @property
+    def ready(self) -> bool:
+        return bool(an.timed_transcript(self.svc.chunks)) and self.svc.pending == 0
+
+    def set_session(self, meta) -> None:
+        if meta is None or meta.id == self._session_id:
+            return
+        self.stop()
+        self._session_id = meta.id
+        self.report = None
+        saved = [d for d in session.list_analyses(self.svc.root, meta.id) if d.get("type") == "followups"]
+        if saved:
+            try:
+                self.report = fu.FollowUpReport.from_json(max(saved, key=lambda d: d["createdAtMs"]))
+            except (KeyError, TypeError):
+                self.report = None
+        self.show_error()
+        self._show()
+        self.refresh()
+
+    def _show(self) -> None:
+        self.view.setMarkdown(fu.follow_up_markdown(self.report) if self.report else "")
+
+    def show_error(self, text: str = "") -> None:
+        self.error.setText(text)
+        self.error.setVisible(bool(text))
+
+    def refresh(self) -> None:
+        self.check_btn.setText("Check again" if self.report else "Check previous meetings")
+        self.check_btn.setVisible(not self._busy)
+        self.rethink_btn.setVisible(self.report is not None and not self._busy)
+        self.stop_btn.setVisible(self._busy)
+        self.export_btn.setVisible(self.report is not None and not self._busy)
+        self.check_btn.setEnabled(self.ready)
+
+    # data ---------------------------------------------------------------------------------
+    def _gather(self) -> tuple[list[fu.PriorItem], list[tuple[str, str, str]]]:
+        meta = self.svc.meta
+        prior = [m for m in self.svc.sessions() if m.mode == "meeting" and m.id != meta.id and m.created_at_ms < meta.created_at_ms][:self.MAX_MEETINGS]
+        items: list[fu.PriorItem] = []
+        summaries: list[tuple[str, str, str]] = []
+        for m in prior:
+            saved = session.list_analyses(self.svc.root, m.id)
+            newest = lambda kind: max((d for d in saved if d.get("type") == kind), key=lambda d: d.get("createdAtMs", 0), default=None)  # noqa: E731
+            if (sm := newest("summary")) and sm.get("markdown"):
+                summaries.append((m.title, date_stamp(m.created_at_ms), sm["markdown"]))
+            for n, a in enumerate((newest("actions") or {}).get("items") or []):
+                items.append(fu.PriorItem(f"{m.id}-{n}", a["task"], a.get("owner"), a.get("deadline"), m.title, date_stamp(m.created_at_ms)))
+        if not items:
+            raise RuntimeError("No earlier action items found. Generate ACTION ITEMS for an earlier meeting first, then check again.")
+        files: list[tuple[str, str]] = []
+        for row in self.db.recent_files(self.MAX_FILES):
+            try:
+                files.append((os.path.basename(row["path"]), read_snapshot(row["path"]).text))
+            except OSError:
+                continue                                   # unreadable or missing file: skip
+        return fu.match_checkbox_state(items, files)[:self.MAX_ITEMS], summaries
+
+    # run ----------------------------------------------------------------------------------
+    def run(self, rethink: bool = False) -> None:
+        if self._busy or not self.ready or self.svc.meta is None:
+            return
+        self.show_error()
+        key = self.ai.api_key()
+        if not key:
+            self.show_error("No Groq API key. Add one in Settings or under New with AI.")
+            return
+        try:
+            items, summaries = self._gather()
+        except RuntimeError as e:
+            self.show_error(str(e))
+            return
+        text, _t = an.limit_transcript(an.timed_transcript(self.svc.chunks))
+        self._plain = re.sub(r"(?m)^\[\d+(?::\d+)+\]\s*", "", text)
+        self._rethink, self._key = rethink, key
+        self._items, self._summaries = items, summaries
+        self._open = [i for i in items if i.state != "done"]
+        self._results = [fu.FollowUp(i.id, "not_mentioned", "", "") for i in items]
+        self._topics: list[fu.RecurringTopic] = []
+        self._dropped = 0
+        self._steps = (["followups"] if self._open else []) + (["topics"] if summaries else [])
+        self._busy = True
+        self.refresh()
+        self._next()
+
+    def _next(self) -> None:
+        if not self._steps:
+            self._finish()
+            return
+        self._step = self._steps.pop(0)
+        if self._step == "followups":
+            system, user = fu.follow_up_system_prompt(), fu.follow_up_user_prompt(self._open, self._plain, self._rethink)
+            self.status.setText("Comparing with this meeting…")
+        else:
+            system, user = fu.topics_system_prompt(), fu.topics_user_prompt(self._summaries, self._plain, self._rethink)
+            self.status.setText("Looking for topics that keep coming up…")
+        w = StreamWorker(self._key, system, user, self)
+        w.done.connect(self._on_done)
+        w.stopped.connect(self._on_stopped)
+        w.failed.connect(self._on_failed)
+        w.finished.connect(self._worker_finished)
+        self._worker = w
+        w.start()
+
+    def _on_done(self, raw: str) -> None:
+        try:
+            if self._step == "followups":
+                parsed, dropped = fu.to_follow_ups(raw, self._open, self._plain)
+                by_id = {p.id: p for p in parsed}
+                self._results = [by_id.get(r.id, r) for r in self._results]
+            else:
+                self._topics, dropped = fu.to_topics(raw, self._plain)
+            self._dropped += dropped
+        except ValueError as e:
+            if self._step == "followups":
+                self._abort(str(e))
+            # topics are a bonus: a bad reply there must not lose the follow-up results
+
+    def _on_stopped(self, _partial: str) -> None:
+        self._steps.clear()
+        self._cancelled = True
+
+    def _on_failed(self, message: str) -> None:
+        if self._step == "followups":
+            self._abort(message)
+        # a failure in the topics step is ignored for the same reason
+
+    def _abort(self, message: str) -> None:
+        self._steps.clear()
+        self._cancelled = True
+        self.show_error(message)
+
+    def _worker_finished(self) -> None:
+        w, self._worker = self._worker, None
+        if w is not None:
+            w.deleteLater()
+        self._next()
+
+    def _finish(self) -> None:
+        cancelled = getattr(self, "_cancelled", False)
+        self._cancelled = False
+        self._busy = False
+        self.status.setText("")
+        if not cancelled:
+            self.report = fu.FollowUpReport(int(time.time() * 1000), self._items, self._results, self._topics, self._dropped)
+            try:
+                session.save_analysis(self.svc.root, self.svc.meta.id, "followups", self.report.to_json(), self.report.created_at_ms)
+            except OSError as e:
+                self.show_error(f"The report could not be saved to the session ({e}).")
+            self._show()
+        self.refresh()
+
+    def stop(self) -> None:
+        self._steps.clear()
+        if self._worker is not None:
+            self._cancelled = True
+            self._worker.cancel()
+            self._worker.wait(3000)
+
+    def export(self) -> None:
+        if self.report is None or self.svc.meta is None:
+            return
+        sec = tpl.Section("followups", "Follow-ups from earlier meetings", "follow-ups", fu.follow_up_markdown(self.report))
+        self._dialog = ExportDialog(self.svc.meta, [sec], "follow-ups", self.ai, self.db, self.sync, self)
+        self._dialog.file_created.connect(self.file_created)
+        self._dialog.show()
+
+
+class QuestionStrip(QWidget):
+    """Live "questions you could ask" during meetings. Opt-in (it sends the recent transcript to Groq), throttled, runs beside
+    the recording and never interrupts it: any failure is swallowed."""
+    TICK_MS = 5000
+
+    def __init__(self, svc, ai, parent=None):
+        super().__init__(parent)
+        self.svc, self.ai = svc, ai
+        self.ideas: list[tuple[int, fu.Suggestion]] = []
+        self._asked: list[str] = []
+        self._seq = 0
+        self._last_at = 0.0
+        self._last_words = 0
+        self._worker: StreamWorker | None = None
+        self._rethink = False
+        self.toggle = QCheckBox("Suggest questions I could ask")
+        self.toggle.setToolTip("Sends the most recent part of the transcript to Groq about once a minute")
+        self.toggle.setChecked(bool(ai.settings.get("voice_questions")))
+        self.toggle.toggled.connect(self._toggled)
+        self.rethink_btn = QPushButton("↻ Rethink")
+        self.rethink_btn.setToolTip("Not what you wanted? Get different suggestions")
+        self.rethink_btn.clicked.connect(self.rethink)
+        self.thinking = QLabel()
+        self.thinking.setObjectName("hint")
+        self.box = QVBoxLayout()
+        self.note = QLabel("Only if you want them. Nothing here interrupts the recording.")
+        self.note.setObjectName("hint")
+        head = QHBoxLayout()
+        head.addWidget(self.toggle)
+        head.addWidget(self.rethink_btn)
+        head.addWidget(self.thinking, 1)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addLayout(head)
+        lay.addLayout(self.box)
+        lay.addWidget(self.note)
+        self._timer = QTimer(self, interval=self.TICK_MS)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+        self._sync_controls()
+
+    @property
+    def enabled(self) -> bool:
+        return self.toggle.isChecked()
+
+    @property
+    def active(self) -> bool:
+        return self.svc.recording and self.svc.meta is not None and self.svc.meta.mode == "meeting"
+
+    def reset(self) -> None:
+        """A new recording, or none: forget everything suggested so far."""
+        self.ideas, self._asked = [], []
+        self._last_at, self._last_words = 0.0, 0
+        self._render()
+
+    def _toggled(self, on: bool) -> None:
+        self.ai.settings.set("voice_questions", on)
+        if on:
+            self._last_at = time.monotonic() - 30            # first suggestions shortly after enabling
+        self._sync_controls()
+        self._render()
+
+    def _sync_controls(self) -> None:
+        self.rethink_btn.setVisible(self.enabled)
+        self.note.setVisible(self.enabled)
+
+    def _tick(self) -> None:
+        if not self.active:
+            return
+        now = time.monotonic()
+        if not self._last_at:
+            self._last_at = now
+        words = word_count(transcript_text(self.svc.chunks))
+        if fu.should_suggest(self.enabled, self.svc.phase == "paused", self._worker is not None, self.svc.pending,
+                             int((now - self._last_at) * 1000), words - self._last_words):
+            self._generate(False)
+
+    def rethink(self) -> None:
+        if self.active and self.enabled:
+            self._generate(True)
+
+    def _generate(self, rethink: bool) -> None:
+        text = transcript_text(self.svc.chunks)
+        key = self.ai.api_key()
+        if self._worker is not None or not key or not word_count(text):
+            return
+        self._rethink = rethink
+        self._last_at, self._last_words = time.monotonic(), word_count(text)
+        w = StreamWorker(key, fu.question_system_prompt(), fu.question_user_prompt(fu.recent_context(text), self._asked, rethink), self)
+        w.done.connect(self._on_done)
+        w.failed.connect(lambda _m: None)                   # suggestions are a bonus: never disturb the recording
+        w.finished.connect(self._finished)
+        self._worker = w
+        self.thinking.setText("thinking…")
+        w.start()
+
+    def _on_done(self, raw: str) -> None:
+        fresh = fu.parse_questions(raw, self._asked)
+        if fresh:
+            self._asked = (self._asked + [f.question for f in fresh])[-30:]
+            new = [(self._next_id(), f) for f in fresh]
+            self.ideas = (new if self._rethink else new + self.ideas)[:6]
+        elif self._rethink:
+            self.ideas = []
+        self._render()
+
+    def _next_id(self) -> int:
+        self._seq += 1
+        return self._seq
+
+    def _finished(self) -> None:
+        w, self._worker = self._worker, None
+        if w is not None:
+            w.deleteLater()
+        self.thinking.setText("")
+
+    def _dismiss(self, idea_id: int) -> None:
+        self.ideas = [i for i in self.ideas if i[0] != idea_id]
+        self._render()
+
+    def _render(self) -> None:
+        while self.box.count():
+            item = self.box.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        if not self.enabled:
+            return
+        for idea_id, s in self.ideas:
+            row = QWidget()
+            h = QHBoxLayout(row)
+            h.setContentsMargins(0, 0, 0, 0)
+            lbl = QLabel(f"<b>{s.kind.upper()}</b>  {s.question}" + (f" <i>— {s.reason}</i>" if s.reason else ""))
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(f"color: {load_theme(self.ai.theme_name())['fg']};")
+            copy = QPushButton("Copy")
+            copy.clicked.connect(lambda _c=False, q=s.question: QGuiApplication.clipboard().setText(q))
+            dismiss = QPushButton("✕")
+            dismiss.setToolTip("Dismiss")
+            dismiss.clicked.connect(lambda _c=False, i=idea_id: self._dismiss(i))
+            h.addWidget(lbl, 1)
+            h.addWidget(copy)
+            h.addWidget(dismiss)
+            self.box.addWidget(row)
+
+    def stop(self) -> None:
+        if self._worker is not None:
+            self._worker.cancel()
+            self._worker.wait(3000)

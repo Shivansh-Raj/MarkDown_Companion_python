@@ -17,7 +17,7 @@ from ..voice.service import VoiceService
 from ..voice.transcript import (MODE_LABELS, format_clock, note_system_prompt, note_user_prompt, suggest_file_name,
                                 transcript_markdown, transcript_text, word_count)
 from .pixel_icon import app_icon
-from .voice_panels import AnalysisPanel, PracticePanel
+from .voice_panels import AnalysisPanel, PracticePanel, QuestionStrip
 
 PAGE_HOME, PAGE_SETUP, PAGE_SESSION = range(3)
 _CARDS = (("meeting", "● Meeting", "Capture a meeting or call, then get a summary, takeaways and action items."),
@@ -210,6 +210,9 @@ class VoiceWindow(QWidget):
         self.note_view.setOpenLinks(False)
         self.note_view.hide()
         lay.addWidget(self.note_view, 1)
+        self.questions = QuestionStrip(self.svc, self.ai)
+        self.questions.hide()
+        lay.addWidget(self.questions)
         self.analysis = AnalysisPanel(self.svc, self.ai, self.db, self.sync)
         self.analysis.file_created.connect(self.file_created)
         self.analysis.hide()
@@ -515,6 +518,10 @@ class VoiceWindow(QWidget):
         self.del_sess_btn.setText("Sure? Delete all" if self._armed == "session" else "Delete session")
         if not self._note.strip() and not noting:
             self.note_view.hide()
+        live_meeting = recording and bool(meta and meta.mode == "meeting")
+        if live_meeting and not self.questions.isVisibleTo(self) and self.svc.chunks == []:
+            self.questions.reset()                           # a new meeting recording starts with a clean slate
+        self.questions.setVisible(live_meeting)
         is_practice = stopped and bool(meta and meta.mode == "practice")
         self.practice_scroll.setVisible(is_practice)
         if is_practice:
