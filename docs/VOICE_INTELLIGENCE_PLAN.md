@@ -51,7 +51,7 @@ app/ui/ask_panel.py               "Ask AI about this file" panel inside Markdown
 | 3 | Meeting analyses + templates + export (new/append/separate, hash-checked) | **done** |
 | 4 | Practice mode: local speaking analytics + AI coach (quote-validated) | **done** |
 | 5 | Follow-up detector, live question suggestions (opt-in), RETHINK, session search/filter/delete, re-transcribe | **done** |
-| 6 | Ask AI about the open file (grounded answers, verified quotes) | |
+| 6 | Ask AI about the open file (grounded answers, verified quotes) | **done** |
 
 ## 5. Risks and mitigations
 

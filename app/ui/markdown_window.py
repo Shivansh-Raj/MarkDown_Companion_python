@@ -102,6 +102,8 @@ class MarkdownWindow(QWidget):
         self._ext_version = 0                    # bumped whenever the file changes underneath us
         self._ai_services = None
         self.ai_panel = None
+        self.ask_panel = None
+        self._ask_open = False
         self._ai_open = False
         self._ai_pending: str | None = None      # AI result waiting for edit mode to start
         self._ai_undo: list[str] = []
@@ -184,6 +186,7 @@ class MarkdownWindow(QWidget):
         self.title_bar.close_clicked.connect(self._request_close)
         self.title_bar.edit_clicked.connect(lambda: self.edit_requested.emit(self.key))
         self.title_bar.ai_clicked.connect(self.open_ai)
+        self.title_bar.ask_clicked.connect(self.open_ask)
         self.save_btn.clicked.connect(self.request_save)
         self.cancel_btn.clicked.connect(self.cancel_edit)
         self.title_bar.minimize_clicked.connect(self.showMinimized)
@@ -232,6 +235,8 @@ class MarkdownWindow(QWidget):
         self._ext_version += 1
         if self.ai_panel is not None:
             self.ai_panel.note_external_change(self._ext_version)
+        if self._ask_open and not self._editing:
+            self.ask_panel.set_source(self._source)
         if self._editing:           # never disturb the editor; show the newest version afterwards
             self._pending_text = text
             return
@@ -350,6 +355,13 @@ class MarkdownWindow(QWidget):
     def set_ai_services(self, ai) -> None:
         from .ai_edit_panel import AiEditPanel
         self._ai_services = ai
+        from .ask_panel import AskPanel
+        self.ask_panel = AskPanel(ai, self)
+        self.ask_panel.hide()
+        self.ask_panel.closed.connect(self.close_ask)
+        self.frame.layout().insertWidget(self.frame.layout().indexOf(self.view_box), self.ask_panel, 1)
+        QShortcut(QKeySequence("Escape"), self.ask_panel, activated=self._ask_escape,
+                  context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.ai_panel = AiEditPanel(ai, self)
         self.ai_panel.hide()
         self.ai_panel.applied.connect(self._on_ai_applied)
@@ -367,9 +379,47 @@ class MarkdownWindow(QWidget):
         else:
             panel.close_panel()
 
+    # Ask AI about the file ---------------------------------------------------------------------
+    def open_ask(self) -> None:
+        if self.ask_panel is None or self._ask_open or not self._available:
+            return
+        if self._compact:
+            self.set_compact(False)
+        if self._ai_open:
+            self.close_ai()
+        self.ask_panel.open_for(self.editor.toPlainText() if self._editing else self._source)
+        self._set_ask_open(True)
+
+    def _set_ask_open(self, on: bool) -> None:
+        self._ask_open = on
+        self.ask_panel.setVisible(on)
+        self.progress.setVisible(self._has_tasks and not on and not self._compact)
+        if on:
+            self.view_box.hide()
+            self.editor.hide()
+            self.editbar.hide()
+        elif self._editing:
+            self.editbar.show()
+            self.editor.show()
+            self.editor.setFocus()
+        else:
+            self.view_box.setVisible(not self._compact)
+
+    def close_ask(self) -> None:
+        if self._ask_open:
+            self._set_ask_open(False)
+
+    def _ask_escape(self) -> None:
+        if self.ask_panel.busy:
+            self.ask_panel.stop()
+        else:
+            self.ask_panel.close_panel()
+
     def open_ai(self) -> None:
         if self.ai_panel is None or self._ai_open or not self._available:
             return
+        if self._ask_open:
+            self.close_ask()
         if self._compact:
             self.set_compact(False)
         if self._editing:
@@ -552,5 +602,7 @@ class MarkdownWindow(QWidget):
     def force_close(self) -> None:
         if self.ai_panel is not None:
             self.ai_panel.cancel_worker()
+        if self.ask_panel is not None:
+            self.ask_panel.cancel_worker()
         self._closing = True
         self.close()
