@@ -8,7 +8,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from ..services.persistence import Database
-from .pixel_icon import app_icon
+from .pixel_icon import app_icon, recording_icon
 
 
 class TrayIcon(QObject):
@@ -18,6 +18,7 @@ class TrayIcon(QObject):
     focus_window_requested = Signal(str)
     toggle_window_requested = Signal(str)
     settings_requested = Signal()
+    voice_requested = Signal()
     restart_requested = Signal()
     exit_requested = Signal()
 
@@ -31,6 +32,7 @@ class TrayIcon(QObject):
         self.menu.addAction("Open Markdown file…", self.open_file_requested.emit)
         self.recent_menu = self.menu.addMenu("Open recent files")
         self.windows_menu = self.menu.addMenu("Manage open windows")
+        self.menu.addAction("Voice Intelligence…", self.voice_requested.emit)
         self.menu.addSeparator()
         self.menu.addAction("Settings…", self.settings_requested.emit)
         self.menu.addAction("Restart application", self.restart_requested.emit)
@@ -46,6 +48,11 @@ class TrayIcon(QObject):
 
     def hide(self) -> None:
         self.tray.hide()
+
+    def set_recording(self, text: str) -> None:
+        """A red-dot icon and a tooltip such as '● REC 03:12' while recording; back to normal when `text` is empty."""
+        self.tray.setIcon(recording_icon() if text else app_icon())
+        self.tray.setToolTip(f"Markdown Companion V2 - {text}" if text else "Markdown Companion V2")
 
     def notify(self, title: str, text: str) -> None:
         if QSystemTrayIcon.supportsMessages():

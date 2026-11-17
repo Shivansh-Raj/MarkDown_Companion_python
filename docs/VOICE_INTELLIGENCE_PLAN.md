@@ -47,7 +47,7 @@ app/ui/ask_panel.py               "Ask AI about this file" panel inside Markdown
 | # | Scope | Status |
 |---|---|---|
 | 1 | Audio core: WAV writer/repair, chunker, session store + recovery, QtMultimedia recorder (start/pause/resume/stop, device list, level, tray REC) | **in progress** |
-| 2 | Whisper transcription queue, Voice window, consent, session list, Quick voice note → Markdown | next |
+| 2 | Whisper transcription queue, Voice window, consent, session list, Quick voice note → Markdown | **done** |
 | 3 | Meeting analyses + templates + export (new/append/separate, hash-checked) | |
 | 4 | Practice mode: local speaking analytics + AI coach (quote-validated) | |
 | 5 | Follow-up detector, live question suggestions (opt-in), RETHINK, session search/filter/delete, re-transcribe | |

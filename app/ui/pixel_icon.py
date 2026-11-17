@@ -39,3 +39,16 @@ def pixel_image(size: int = 256) -> QImage:
 
 def app_icon() -> QIcon:
     return QIcon(__import__("PySide6.QtGui", fromlist=["QPixmap"]).QPixmap.fromImage(pixel_image(64)))
+
+
+def recording_icon() -> QIcon:
+    """The app icon with a red dot: shown in the tray while a voice recording is active."""
+    from PySide6.QtGui import QPixmap
+    pix = QPixmap.fromImage(pixel_image(64))
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+    p.setPen(QColor("#1e1f24"))
+    p.setBrush(QColor("#e5382f"))
+    p.drawEllipse(36, 36, 26, 26)
+    p.end()
+    return QIcon(pix)

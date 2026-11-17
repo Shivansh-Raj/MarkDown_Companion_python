@@ -43,6 +43,7 @@ class HomeWindow(QWidget):
     forget_requested = Signal(str)      # file key
     settings_requested = Signal()
     ai_create_requested = Signal()
+    voice_requested = Signal()
     exit_requested = Signal()
 
     def __init__(self, db, window_manager, settings):
@@ -111,13 +112,16 @@ class HomeWindow(QWidget):
         self.open_btn.clicked.connect(self.open_dialog_requested)
         self.ai_btn = QPushButton("\u270e  New with AI")
         self.ai_btn.clicked.connect(self.ai_create_requested)
+        self.voice_btn = QPushButton("\u25cf  Voice")
+        self.voice_btn.clicked.connect(self.voice_requested)
         settings_btn = QPushButton("Settings")
         settings_btn.clicked.connect(self.settings_requested)
-        for b in (self.open_btn, self.ai_btn, settings_btn):
+        for b in (self.open_btn, self.ai_btn, self.voice_btn, settings_btn):
             b.setMinimumHeight(max(40, b.minimumHeight()))
             b.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ai_btn.setMinimumWidth(150)                 # asymmetric 3D borders can make Qt's size hint too small
-        settings_btn.setMinimumWidth(110)
+        settings_btn.setMinimumWidth(90)
+        self.voice_btn.setMinimumWidth(80)
         anim = self._settings.get("animations") is not False
         self.cat = TypingCat(self._settings.get("theme") or "retro", anim, scale=2, crop_top=8)
         cat_row = QHBoxLayout()                          # the cat sits right on top of the Open button
@@ -132,6 +136,7 @@ class HomeWindow(QWidget):
         row = QHBoxLayout()
         row.setSpacing(10)
         row.addWidget(self.ai_btn, 1)
+        row.addWidget(self.voice_btn, 1)
         row.addWidget(settings_btn, 1)
         root.addLayout(row)
 

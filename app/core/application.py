@@ -12,6 +12,8 @@ from ..ui.button_fx import ButtonFx
 from ..utils.macos import set_dock_icon_visible
 from ..services.persistence import Database
 from ..ui.ai_create_window import AiCreateWindow
+from ..ui.voice_window import VoiceWindow
+from ..voice.service import VoiceService
 from ..ui.file_picker import pick_markdown_file
 from ..ui.home_window import HomeWindow
 from ..ui.pixel_icon import app_icon
@@ -48,6 +50,9 @@ class CompanionApp(QObject):
         self.tray = TrayIcon(self.db, self.windows, self) if with_tray else None
         self._settings_win: SettingsWindow | None = None
         self._ai_win: AiCreateWindow | None = None
+        self._voice_win: VoiceWindow | None = None
+        self.voice = VoiceService(app_data_dir() / "voice", self.windows.ai, self)
+        self.voice.indicator.connect(self._on_voice_indicator)
         self.home = HomeWindow(self.db, self.windows, self.settings)
         self.home.open_dialog_requested.connect(self.open_via_picker)
         self.home.open_path_requested.connect(self.open_path)
@@ -56,6 +61,7 @@ class CompanionApp(QObject):
         self.home.forget_requested.connect(self.db.forget_file)
         self.home.settings_requested.connect(self.show_settings)
         self.home.ai_create_requested.connect(self.show_ai_create)
+        self.home.voice_requested.connect(self.show_voice)
         self.home.exit_requested.connect(self.exit)
 
         self.windows.home_requested.connect(self.home.present)
@@ -71,6 +77,7 @@ class CompanionApp(QObject):
             self.tray.focus_window_requested.connect(self.windows.focus)
             self.tray.toggle_window_requested.connect(self.windows.toggle_visibility)
             self.tray.settings_requested.connect(self.show_settings)
+            self.tray.voice_requested.connect(self.show_voice)
             self.tray.restart_requested.connect(self.restart)
             self.tray.exit_requested.connect(self.exit)
 
@@ -91,6 +98,7 @@ class CompanionApp(QObject):
         self.qapp.setStyle(self.button_fx)
         if self.tray and not self.tray.show():
             log.warning("system tray not available")
+        self.voice.recover()                        # repair recordings interrupted by a crash
         self._register_shortcuts()
         if self.settings.get("restore_windows"):
             self.windows.restore_open_windows()
@@ -103,6 +111,7 @@ class CompanionApp(QObject):
             return
         self._shutdown_done = True
         self.shortcuts.unregister_all()
+        self.voice.shutdown()                       # finalise an in-progress recording
         self.home.hide()
         if self._ai_win is not None:
             self._ai_win.close()
@@ -207,6 +216,16 @@ class CompanionApp(QObject):
         self._settings_win.show()
         self._settings_win.raise_()
         self._settings_win.activateWindow()
+
+    def show_voice(self) -> None:
+        if self._voice_win is None:
+            self._voice_win = VoiceWindow(self.voice, self.windows.ai)
+            self._voice_win.file_created.connect(self.open_path)
+        self._voice_win.present()
+
+    def _on_voice_indicator(self, text: str) -> None:
+        if self.tray:
+            self.tray.set_recording(text)
 
     def show_ai_create(self) -> None:
         if self._ai_win is None:
