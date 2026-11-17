@@ -79,3 +79,6 @@ def make_app(qapp, data_dir):
     yield factory
     for a in apps:
         a.shutdown()
+        a.home.deleteLater()                # windows from finished tests must not pile up: a live widget costs time
+    from PySide6.QtCore import QCoreApplication, QEvent
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)

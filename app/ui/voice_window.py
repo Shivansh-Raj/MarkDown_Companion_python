@@ -17,6 +17,7 @@ from ..voice.service import VoiceService
 from ..voice.transcript import (MODE_LABELS, format_clock, note_system_prompt, note_user_prompt, suggest_file_name,
                                 transcript_markdown, transcript_text, word_count)
 from .pixel_icon import app_icon
+from .voice_panels import AnalysisPanel
 
 PAGE_HOME, PAGE_SETUP, PAGE_SESSION = range(3)
 _CARDS = (("meeting", "● Meeting", "Capture a meeting or call, then get a summary, takeaways and action items."),
@@ -50,9 +51,9 @@ class LevelMeter(QWidget):
 class VoiceWindow(QWidget):
     file_created = Signal(str)          # absolute path of a Markdown file written from voice output
 
-    def __init__(self, service: VoiceService, ai):
+    def __init__(self, service: VoiceService, ai, db=None, sync=None):
         super().__init__(None, Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
-        self.svc, self.ai = service, ai
+        self.svc, self.ai, self.db, self.sync = service, ai, db, sync
         self.setObjectName("home")                 # themed background like the home screen
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setWindowTitle("Voice Intelligence")
@@ -209,6 +210,10 @@ class VoiceWindow(QWidget):
         self.note_view.setOpenLinks(False)
         self.note_view.hide()
         lay.addWidget(self.note_view, 1)
+        self.analysis = AnalysisPanel(self.svc, self.ai, self.db, self.sync)
+        self.analysis.file_created.connect(self.file_created)
+        self.analysis.hide()
+        lay.addWidget(self.analysis, 1)
         self.info = QLabel()
         self.info.setObjectName("hint")
         self.info.setWordWrap(True)
@@ -501,6 +506,11 @@ class VoiceWindow(QWidget):
         self.del_sess_btn.setText("Sure? Delete all" if self._armed == "session" else "Delete session")
         if not self._note.strip() and not noting:
             self.note_view.hide()
+        is_meeting = stopped and bool(meta and meta.mode == "meeting")
+        self.analysis.setVisible(is_meeting)
+        if is_meeting:
+            self.analysis.set_session(meta)
+            self.analysis.refresh()
         if stopped and meta:
             extra = "Transcribing the last part…" if busy else (f"{failed} part(s) failed - use Retry failed." if failed else "")
             self.info.setText(f"{MODE_LABELS.get(meta.mode, meta.mode)} · {format_clock(meta.duration_ms)} · {word_count(text)} words  {extra}".strip())

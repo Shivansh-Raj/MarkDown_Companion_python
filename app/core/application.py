@@ -112,6 +112,11 @@ class CompanionApp(QObject):
         self._shutdown_done = True
         self.shortcuts.unregister_all()
         self.voice.shutdown()                       # finalise an in-progress recording
+        if self._voice_win is not None:             # closing only hides it, so destroy it explicitly on quit
+            self._voice_win.analysis.stop()
+            self._voice_win.hide()
+            self._voice_win.deleteLater()
+            self._voice_win = None
         self.home.hide()
         if self._ai_win is not None:
             self._ai_win.close()
@@ -219,7 +224,7 @@ class CompanionApp(QObject):
 
     def show_voice(self) -> None:
         if self._voice_win is None:
-            self._voice_win = VoiceWindow(self.voice, self.windows.ai)
+            self._voice_win = VoiceWindow(self.voice, self.windows.ai, self.db, self.files.sync)
             self._voice_win.file_created.connect(self.open_path)
         self._voice_win.present()
 
