@@ -123,6 +123,9 @@ QScrollArea#aiscroll, QScrollArea#aiscroll > QWidget > QWidget { background: tra
 QScrollBar:vertical { background: %(bg_alt)s; width: 14px; margin: 0; border-left: 2px solid %(border)s; }
 QScrollBar::handle:vertical { background: %(border_hi)s; min-height: 24px; margin: 2px; border-right: 2px solid %(shadow)s; border-bottom: 2px solid %(shadow)s; }
 QScrollBar::handle:vertical:hover { background: %(accent)s; }
+QScrollBar:horizontal { background: %(bg_alt)s; height: 14px; margin: 0; border-top: 2px solid %(border)s; }
+QScrollBar::handle:horizontal { background: %(border_hi)s; min-width: 24px; margin: 2px; border-right: 2px solid %(shadow)s; border-bottom: 2px solid %(shadow)s; }
+QScrollBar::handle:horizontal:hover { background: %(accent)s; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; } QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 
 /* ---- dialogs and form controls ---- */

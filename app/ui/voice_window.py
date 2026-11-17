@@ -7,7 +7,7 @@ import html
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
-                               QStackedWidget, QTextBrowser, QVBoxLayout, QWidget)
+                               QScrollArea, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget)
 
 from ..ai.create import title_from_markdown, write_new_file
 from ..ai.worker import StreamWorker
@@ -17,7 +17,7 @@ from ..voice.service import VoiceService
 from ..voice.transcript import (MODE_LABELS, format_clock, note_system_prompt, note_user_prompt, suggest_file_name,
                                 transcript_markdown, transcript_text, word_count)
 from .pixel_icon import app_icon
-from .voice_panels import AnalysisPanel
+from .voice_panels import AnalysisPanel, PracticePanel
 
 PAGE_HOME, PAGE_SETUP, PAGE_SESSION = range(3)
 _CARDS = (("meeting", "● Meeting", "Capture a meeting or call, then get a summary, takeaways and action items."),
@@ -214,6 +214,15 @@ class VoiceWindow(QWidget):
         self.analysis.file_created.connect(self.file_created)
         self.analysis.hide()
         lay.addWidget(self.analysis, 1)
+        self.practice = PracticePanel(self.svc, self.ai, self.db, self.sync)
+        self.practice.file_created.connect(self.file_created)
+        self.practice_scroll = QScrollArea()                 # the coaching view is taller than the window: let it scroll
+        self.practice_scroll.setWidgetResizable(True)
+        self.practice_scroll.setObjectName("aiscroll")
+        self.practice_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.practice_scroll.setWidget(self.practice)
+        self.practice_scroll.hide()
+        lay.addWidget(self.practice_scroll, 2)
         self.info = QLabel()
         self.info.setObjectName("hint")
         self.info.setWordWrap(True)
@@ -506,7 +515,13 @@ class VoiceWindow(QWidget):
         self.del_sess_btn.setText("Sure? Delete all" if self._armed == "session" else "Delete session")
         if not self._note.strip() and not noting:
             self.note_view.hide()
+        is_practice = stopped and bool(meta and meta.mode == "practice")
+        self.practice_scroll.setVisible(is_practice)
+        if is_practice:
+            self.practice.set_session(meta)
+            self.practice.refresh()
         is_meeting = stopped and bool(meta and meta.mode == "meeting")
+        self.transcript.setMaximumHeight(120 if (is_practice or is_meeting) else 16777215)   # leave room for the panels
         self.analysis.setVisible(is_meeting)
         if is_meeting:
             self.analysis.set_session(meta)
