@@ -17,6 +17,8 @@ from ..voice.service import VoiceService
 from ..voice.transcript import (MODE_LABELS, format_clock, note_system_prompt, note_user_prompt, suggest_file_name,
                                 transcript_markdown, transcript_text, word_count)
 from .flow_layout import FlowLayout
+from .fonts import body_font
+from .rich import set_markdown, style_browser
 from .pixel_icon import app_icon
 from .voice_panels import AnalysisPanel, PracticePanel, QuestionStrip
 
@@ -55,6 +57,7 @@ class VoiceWindow(QWidget):
     def __init__(self, service: VoiceService, ai, db=None, sync=None):
         super().__init__(None, Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
         self.svc, self.ai, self.db, self.sync = service, ai, db, sync
+        self.setFont(body_font(12))                # same text look as the Markdown view
         self.setObjectName("home")                 # themed background like the home screen
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setWindowTitle("Voice Intelligence")
@@ -216,10 +219,12 @@ class VoiceWindow(QWidget):
         self.transcript = QTextBrowser()
         self.transcript.setObjectName("preview")
         self.transcript.setOpenLinks(False)
+        style_browser(self.transcript, self.ai.theme_name())
         lay.addWidget(self.transcript, 1)
         self.note_view = QTextBrowser()
         self.note_view.setObjectName("preview")
         self.note_view.setOpenLinks(False)
+        style_browser(self.note_view, self.ai.theme_name())
         self.note_view.hide()
         lay.addWidget(self.note_view, 1)
         self.questions = QuestionStrip(self.svc, self.ai)
@@ -420,12 +425,12 @@ class VoiceWindow(QWidget):
 
     def _on_note_text(self, full: str) -> None:
         self._note = full
-        self.note_view.setMarkdown(full)
+        set_markdown(self.note_view, full)
 
     def _on_note_done(self, full: str) -> None:
         self._note = full or self._note
         if self._note.strip():
-            self.note_view.setMarkdown(self._note)
+            set_markdown(self.note_view, self._note)
         self._refresh()
 
     def _on_note_failed(self, message: str) -> None:

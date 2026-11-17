@@ -64,6 +64,7 @@ _QSS = """
 QWidget#root { background: %(shadow)s; }
 QWidget#frame { background: %(bg)s; border: 3px solid %(border_hi)s; }
 QWidget#titlebar { background: %(accent)s; border-bottom: 3px solid %(border_hi)s; }
+QLabel { color: %(fg)s; }                      /* plain labels follow the theme (named labels below override it) */
 QLabel#title { color: %(accent_ink)s; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 12px; letter-spacing: 1px; }
 QLabel#status { background: #5a2b2b; color: #ffd9d9; padding: 4px 8px; font-size: 11px; border-bottom: 2px solid #8a3b3b; }
 QLabel#status[kind="info"] { background: %(bg_alt)s; color: %(accent2)s; border-bottom: 2px solid %(border)s; }
@@ -101,9 +102,9 @@ QPushButton[v1="true"][primary="true"] { background: %(accent)s; color: %(accent
 QPushButton[v1="true"][primary="true"]:hover { background: %(accent)s; color: %(accent_ink)s; }
 QLabel#launcherhint { color: %(muted)s; font-size: 11px; }
 QLabel#launchererror { color: %(fg)s; background: %(danger_bg)s; border: 2px solid %(border_hi)s; padding: 6px 8px; font-size: 12px; }
-QLabel#hero { color: %(accent)s; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 26px; letter-spacing: 3px; }
+QLabel#hero { color: %(accent)s; font-family: "Silkscreen", Consolas, Menlo, monospace; font-weight: bold; font-size: 22px; letter-spacing: 2px; }
 QLabel#hint { color: %(muted)s; font-size: 11px; } QLabel#hint[warn="true"] { color: #ff9b6b; }
-QLabel#section { color: %(accent2)s; font-weight: bold; font-size: 11px; letter-spacing: 2px; margin-top: 6px; border-bottom: 3px double %(border)s; padding-bottom: 3px; }
+QLabel#section { color: %(accent2)s; font-family: "Silkscreen", Consolas, Menlo, monospace; font-weight: bold; font-size: 11px; letter-spacing: 1px; margin-top: 6px; border-bottom: 3px double %(border)s; padding-bottom: 3px; }
 QListWidget { background: %(code_bg)s; color: %(fg)s; outline: 0; font-family: Consolas, Menlo, monospace; padding: 2px;
   border-top: 3px solid %(shadow)s; border-left: 3px solid %(shadow)s; border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
 QListWidget::item { padding: 6px 8px; border-bottom: 1px dashed %(border)s; } QListWidget::item:hover { background: %(bg_alt)s; }
@@ -136,7 +137,7 @@ QScrollBar::handle:horizontal:hover { background: %(accent)s; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; } QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 
 /* ---- dialogs and form controls ---- */
-QDialog, QMenu { background: %(bg)s; color: %(fg)s; font-family: Consolas, Menlo, monospace; }
+QDialog, QMenu { background: %(bg)s; color: %(fg)s; font-family: "Cascadia Mono", Consolas, Menlo, "DejaVu Sans Mono", monospace; }
 QMenu { border: 3px solid %(border_hi)s; } QMenu::item { padding: 5px 22px; }
 QMenu::item:selected { background: %(accent)s; color: %(accent_ink)s; } QMenu::separator { height: 2px; background: %(border)s; }
 QDialog QLabel, QCheckBox, QRadioButton { color: %(fg)s; }

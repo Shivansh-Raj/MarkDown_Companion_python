@@ -12,6 +12,7 @@ from ..ai.worker import KeyTestWorker
 
 from ..core.settings_manager import SettingsManager
 from ..markdown.theme import list_themes
+from .fonts import body_font, pixel_font
 
 
 def _seq_text(edit: QKeySequenceEdit) -> str:
@@ -23,6 +24,7 @@ class SettingsWindow(QDialog):
 
     def __init__(self, settings: SettingsManager, shortcut_status: str = "", ai=None):
         super().__init__()
+        self.setFont(body_font(12))                  # same text look as the Markdown view
         self.settings = settings
         self.ai = ai
         self._test: KeyTestWorker | None = None
@@ -134,6 +136,10 @@ class SettingsWindow(QDialog):
         root = QVBoxLayout(self)
         root.addLayout(form)
         root.addLayout(buttons)
+        for i in range(form.rowCount()):                 # row labels in the pixel font, like the Markdown view's headings
+            item = form.itemAt(i, QFormLayout.ItemRole.LabelRole)
+            if item is not None and item.widget() is not None:
+                item.widget().setFont(pixel_font(11))
         self.setMinimumWidth(520)
 
     # AI ----------------------------------------------------------------------------------------

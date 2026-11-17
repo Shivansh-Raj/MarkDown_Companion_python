@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..markdown.theme import chrome_qss
 from ..ui.button_fx import ButtonFx
+from ..ui.fonts import load_fonts
 from ..utils.macos import set_dock_icon_visible
 from ..services.persistence import Database
 from ..ui.ai_create_window import AiCreateWindow
@@ -42,6 +43,7 @@ class CompanionApp(QObject):
         self._shutdown_done = False
         self.shortcut_status = ""
 
+        load_fonts()                                # the Silkscreen heading font, for Qt text as well as the Markdown pages
         self.db = Database(app_data_dir() / "companion.db")
         self.settings = SettingsManager(self.db, self)
         self.files = FileManager(poll=poll, parent=self)

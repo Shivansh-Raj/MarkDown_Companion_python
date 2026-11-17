@@ -74,17 +74,13 @@ def is_not_found(answer: str) -> bool:
     return answer.strip().lower().startswith("i couldn't find that in this file")
 
 
-def conversation_markdown(turns: list[Turn], live_question: str | None = None, live_answer: str = "") -> str:
-    """The whole conversation as Markdown: YOU / FILE SAYS, then the checked quotes under each answer."""
-    out: list[str] = []
-    for t in turns:
-        out += [f"**YOU**  {t.question}", "", "**FILE SAYS**" if not t.error else "**PROBLEM**", "", t.answer, ""]
-        if not t.error and not is_not_found(t.answer):
-            verified = [q for q, ok in (t.sources or []) if ok]
-            if verified:
-                out += ["**Quotes from the file**", "", *[f"- *“{q}”*" for q in verified], ""]
-            else:
-                out += ["_No exact quote could be matched in the file, so double-check this answer._", ""]
-    if live_question is not None:
-        out += [f"**YOU**  {live_question}", "", "**FILE SAYS**", "", live_answer or "_Reading the file…_", ""]
-    return "\n".join(out)
+def visible_quotes(turn: Turn) -> list[str]:
+    """The quotes worth showing under an answer: only those found in the file (never invented ones)."""
+    if turn.error or is_not_found(turn.answer):
+        return []
+    return [q for q, ok in (turn.sources or []) if ok]
+
+
+def needs_quote_warning(turn: Turn) -> bool:
+    """A real answer none of whose quotes could be matched in the file: the user should double-check it."""
+    return not turn.error and not is_not_found(turn.answer) and not visible_quotes(turn)

@@ -40,17 +40,14 @@ def test_very_large_files_are_cut_on_a_line_boundary_and_flagged():
     assert cut and len(text) <= ask.MAX_ASK_CHARS and text.endswith("line of text")
 
 
-def test_conversation_shows_verified_quotes_and_warns_when_none_match():
-    turns = [ask.Turn("What is left?", "Book the venue.", [("Book the venue for March 14", True), ("invented", False)]),
-             ask.Turn("Who pays?", "Priya pays.", [("Priya pays", False)]),
-             ask.Turn("Who owns it?", ask.NOT_FOUND, []),
-             ask.Turn("Anything?", "Groq request failed", error=True)]
-    md = ask.conversation_markdown(turns, "And then?", "Streaming…")
-    assert "**Quotes from the file**" in md and "- *“Book the venue for March 14”*" in md and "invented" not in md   # unverified never shown
-    assert md.count("No exact quote could be matched") == 1 and "**PROBLEM**" in md
-    two = ask.conversation_markdown([ask.Turn("q", "a", [("one", True), ("two", True)])])
-    assert "- *“one”*\n- *“two”*" in two                                              # quotes are a real Markdown bullet list
-    assert md.count("**YOU**") == 5 and "Streaming…" in md and "Reading the file" in ask.conversation_markdown([], "q", "")
+def test_only_verified_quotes_are_shown_and_a_missing_match_triggers_the_warning():
+    ok = ask.Turn("What is left?", "Book the venue.", [("Book the venue for March 14", True), ("invented", False)])
+    assert ask.visible_quotes(ok) == ["Book the venue for March 14"] and not ask.needs_quote_warning(ok)
+    none = ask.Turn("Who pays?", "Priya pays.", [("Priya pays", False)])
+    assert ask.visible_quotes(none) == [] and ask.needs_quote_warning(none)
+    assert ask.visible_quotes(ask.Turn("q", ask.NOT_FOUND, [])) == [] and not ask.needs_quote_warning(ask.Turn("q", ask.NOT_FOUND, []))
+    err = ask.Turn("q", "Groq request failed", error=True)
+    assert ask.visible_quotes(err) == [] and not ask.needs_quote_warning(err)
 
 
 import pytest

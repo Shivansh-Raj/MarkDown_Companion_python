@@ -9,6 +9,8 @@ from ..ai.create import (DOC_TYPE_LABELS, build_system_prompt, split_type_line, 
                          write_new_file)
 from ..ai.services import AiServices
 from ..ai.worker import StreamWorker
+from .fonts import body_font
+from .rich import set_markdown, style_browser
 from .typing_cat import TypingCat
 
 PAGE_KEY, PAGE_PROMPT, PAGE_RUN = range(3)
@@ -24,6 +26,7 @@ class AiCreateWindow(QDialog):
         self._raw = ""
         self.setWindowTitle("Markdown Companion V2 - New file with AI")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setFont(body_font(12))                 # same text look as the Markdown view
         self.setMinimumSize(460, 520)
 
         self.stack = QStackedWidget()
@@ -108,6 +111,7 @@ class AiCreateWindow(QDialog):
         self.preview = QTextBrowser()
         self.preview.setObjectName("preview")
         self.preview.setOpenLinks(False)
+        style_browser(self.preview, self.ai.theme_name())
         self.stop_btn = QPushButton("■  Stop")
         self.stop_btn.clicked.connect(self.stop)
         self.save_btn = QPushButton("Save && open")
@@ -205,7 +209,7 @@ class AiCreateWindow(QDialog):
         self.run_label.setText("Thinking" if pending or not body else f"Writing {label.lower()}".strip())
         if body:
             bar = self.preview.verticalScrollBar()
-            self.preview.setMarkdown(body)
+            set_markdown(self.preview, body)
             bar.setValue(bar.maximum())
 
     def _on_done(self, full: str) -> None:
@@ -219,7 +223,7 @@ class AiCreateWindow(QDialog):
         self.cat.set_mood("waiting")
         self.cat.start()
         self.run_label.setText(f"Draft ready ({label.lower()}). Keep it?" if label else "Draft ready. Keep it?")
-        self.preview.setMarkdown(body)
+        set_markdown(self.preview, body)
         self.stop_btn.hide()
         self.save_btn.show()
         self.discard_btn.show()

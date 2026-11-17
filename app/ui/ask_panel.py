@@ -4,11 +4,53 @@ from __future__ import annotations
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget
 
+import html
+
 from ..ai import ask
 from ..ai.services import AiServices
 from ..ai.worker import StreamWorker
+from ..markdown.renderer import render_markdown
+from ..markdown.theme import load_theme
+from .fonts import PIXEL, body_font
+from .rich import style_browser
 
 EXAMPLES = ("What is still left to do?", "Summarise this file in three bullets.", "What is due soonest?")
+
+
+def conversation_html(turns: list[ask.Turn], theme_id: str, asked: str | None = None, live: str = "") -> str:
+    """V1's ask view: a small pixel tag (YOU / FILE SAYS) before each part, the answer as Markdown, checked quotes in a bar."""
+    t = load_theme(theme_id)
+
+    def tag(text: str) -> str:
+        return (f'<span style="background-color:{t["bg_alt"]}; color:{t["fg"]}; font-family:{PIXEL}; font-size:9px;">'
+                f"&nbsp;{text}&nbsp;</span>")
+
+    def question(q: str) -> str:
+        return f'<p style="color:{t["muted"]}; margin-bottom:2px;">{tag("YOU")}&nbsp; {html.escape(q)}</p>'
+
+    def answer(label: str, body_html: str) -> str:
+        return f'<p style="margin-top:6px; margin-bottom:0;">{tag(label)}</p>{body_html}'
+
+    out: list[str] = []
+    for turn in turns:
+        out.append(question(turn.question))
+        if turn.error:
+            out.append(answer("PROBLEM", f'<p style="color:#d9534f;">{html.escape(turn.answer)}</p>'))
+            continue
+        out.append(answer("FILE SAYS", render_markdown(turn.answer)))
+        quotes = ask.visible_quotes(turn)
+        if quotes:
+            body = "<br>".join(f"<i>“{html.escape(q)}”</i>" for q in quotes)
+            out.append(f'<p style="margin:2px 0 0 0; color:{t["muted"]}; font-family:{PIXEL}; font-size:9px;">Quotes from the file</p>'
+                       f'<table width="100%" cellspacing="0" cellpadding="0"><tr><td width="3" bgcolor="{t["accent"]}"></td>'
+                       f'<td style="padding-left:8px; color:{t["muted"]};">{body}</td></tr></table>')
+        elif ask.needs_quote_warning(turn):
+            out.append(f'<p style="color:{t["muted"]};"><i>No exact quote could be matched in the file, so double-check this answer.</i></p>')
+        out.append('<hr style="margin:8px 0;">')
+    if asked is not None:
+        out.append(question(asked))
+        out.append(answer("FILE SAYS", render_markdown(live) if live.strip() else f'<p style="color:{t["muted"]};"><i>Reading the file…</i></p>'))
+    return "".join(out)
 
 
 class _EnterToSend(QObject):
@@ -60,9 +102,11 @@ class AskPanel(QWidget):
         self.error.setWordWrap(True)
         self.error.hide()
 
+        self.setFont(body_font(12))                              # same text look as the Markdown view
         self.log = QTextBrowser()
         self.log.setObjectName("preview")
         self.log.setOpenLinks(False)
+        style_browser(self.log, ai.theme_name())
         self.examples = QWidget()
         ex = QHBoxLayout(self.examples)
         ex.setContentsMargins(0, 0, 0, 0)
@@ -198,9 +242,9 @@ class AskPanel(QWidget):
 
     # view ------------------------------------------------------------------------------
     def _render(self) -> None:
-        md = ask.conversation_markdown(self.turns, self._asked, self._live)
         bar = self.log.verticalScrollBar()
-        self.log.setMarkdown(md)
+        self.log.document().setDefaultStyleSheet(self.log.document().defaultStyleSheet())
+        self.log.setHtml(conversation_html(self.turns, self.ai.theme_name(), self._asked, self._live))
         bar.setValue(bar.maximum())
 
     def _refresh(self) -> None:

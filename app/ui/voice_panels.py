@@ -20,6 +20,8 @@ from ..voice import followups as fu
 from ..voice import export, session, templates as tpl
 from ..services.synchronization import read_snapshot
 from .flow_layout import FlowLayout
+from .fonts import body_font
+from .rich import set_markdown, style_browser
 from ..voice.transcript import date_stamp, format_clock, suggest_file_name, transcript_text, word_count
 
 
@@ -38,6 +40,7 @@ class ExportDialog(QDialog):
         super().__init__(parent)
         self.meta, self.sections, self.doc_title, self.ai, self.db, self.sync = meta, sections, doc_title, ai, db, sync
         self._folder: str | None = None                    # None = the default save folder
+        self.setFont(body_font(12))                        # same text look as the Markdown view
         self.setWindowTitle("Export as Markdown")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.setMinimumSize(520, 560)
@@ -254,6 +257,7 @@ class AnalysisPanel(QWidget):
             view = QTextBrowser()
             view.setObjectName("preview")
             view.setOpenLinks(False)
+            style_browser(view, ai.theme_name())
             copy = QPushButton("Copy")
             copy.clicked.connect(lambda _c=False, k=t: self._copy(k))
             regen = QPushButton("Regenerate")
@@ -306,7 +310,7 @@ class AnalysisPanel(QWidget):
 
     def _show(self, kind: str) -> None:
         r = self.results.get(kind)
-        self.views[kind].setMarkdown(r.markdown if r else "")
+        set_markdown(self.views[kind], r.markdown if r else "")
         self.tabs.setTabText(an.ANALYSIS_TYPES.index(kind), an.ANALYSIS_LABELS[kind] + (" ✓" if r else ""))
 
     def show_error(self, text: str = "") -> None:
@@ -538,6 +542,7 @@ class PracticePanel(QWidget):
             v = QTextBrowser()
             v.setObjectName("preview")
             v.setOpenLinks(False)
+            style_browser(v, ai.theme_name())
             self.views[k] = v
             self.tabs.addTab(v, co.COACH_LABELS[k])
         self.tabs.setMinimumHeight(220)
@@ -707,7 +712,7 @@ class PracticePanel(QWidget):
     def _render_results(self) -> None:
         for kind, view in self.views.items():
             r = self.results.get(kind)
-            view.setMarkdown(co.coach_markdown(r) if r else "")
+            set_markdown(view, co.coach_markdown(r) if r else "")
             self.tabs.setTabText(co.COACH_TYPES.index(kind), co.COACH_LABELS[kind] + (" ✓" if r else ""))
         self.tabs.setTabText(0, co.COACH_LABELS["sentences"] + (" ✓" if "sentences" in self.results else ""))
         while self.sentence_box.count():
@@ -838,6 +843,7 @@ class FollowUpPanel(QWidget):
         self.view = QTextBrowser()
         self.view.setObjectName("preview")
         self.view.setOpenLinks(False)
+        style_browser(self.view, ai.theme_name())
         row = FlowLayout(None, 0, 6, 4)
         for b in (self.check_btn, self.rethink_btn, self.stop_btn, self.export_btn, self.status):
             row.addWidget(b)
@@ -869,7 +875,7 @@ class FollowUpPanel(QWidget):
         self.refresh()
 
     def _show(self) -> None:
-        self.view.setMarkdown(fu.follow_up_markdown(self.report) if self.report else "")
+        set_markdown(self.view, fu.follow_up_markdown(self.report) if self.report else "")
 
     def show_error(self, text: str = "") -> None:
         self.error.setText(text)
