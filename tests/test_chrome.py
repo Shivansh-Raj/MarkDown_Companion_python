@@ -54,7 +54,6 @@ def test_it_can_be_resized_from_its_edges_and_corners_and_dragged_by_the_title_b
     assert corner & Qt.Edge.RightEdge and corner & Qt.Edge.BottomEdge
     assert not w._edges_at(QPoint(250, 300))                              # the middle is not an edge
     assert w.title_bar.minimumWidth() >= 0 and hasattr(w.title_bar, "_drag_origin")     # dragging is the shared title bar's job
-    assert w.minimumWidth() >= 460 and w.minimumHeight() >= 520
 
 
 def test_the_minimise_button_is_wired(win, monkeypatch):
@@ -63,3 +62,35 @@ def test_the_minimise_button_is_wired(win, monkeypatch):
     monkeypatch.setattr(w, "showMinimized", lambda: called.append(1))
     w.title_bar.minimize_clicked.emit()
     assert called == [1]
+
+
+def test_the_window_can_be_made_small_on_every_page_and_content_scrolls_or_wraps_instead(win, monkeypatch):
+    """It used to refuse to shrink below 460x520; the pages need far less and scroll / wrap when the window is short."""
+    from tests.conftest import wait_for
+    monkeypatch.setattr("app.ai.worker.stream_chat", lambda k, s, u, on_text, cancel=None: "TYPE: plan\n\n# Plan\n- [ ] one\n")
+    app, w = win
+    assert w.minimumWidth() <= 360 and w.minimumHeight() <= 320
+    pages = {}
+    w.show_start()
+    pages["prompt"] = w.stack.currentWidget()
+    w.prompt.setPlainText("Plan something")
+    w.generate()
+    assert wait_for(lambda: w._worker is None)
+    pages["result"] = w.stack.currentWidget()
+    w.show_start()
+    w._show_key(editing=False)
+    pages["key"] = w.stack.currentWidget()
+    for name, page in pages.items():
+        w.stack.setCurrentWidget(page)
+        w.resize(w.minimumSize())
+        assert w.width() <= 360 and w.height() <= 320, name               # the OS can really make it that small
+    # the main buttons stay pinned at the bottom (outside the scrolling content) so they are never scrolled out of reach
+    w.show()
+    w.stack.setCurrentWidget(pages["prompt"])
+    w.resize(w.minimumSize())
+    QTest.qWait(30)
+    bottom = w.stack.mapTo(w, w.stack.rect().bottomLeft()).y()
+    assert w.gen_btn.isVisibleTo(w) and w.gen_btn.mapTo(w, w.gen_btn.rect().bottomLeft()).y() <= bottom + 1
+    w.stack.setCurrentWidget(pages["result"])
+    QTest.qWait(30)
+    assert w.save_btn.isVisibleTo(w) and w.save_btn.mapTo(w, w.save_btn.rect().bottomLeft()).y() <= bottom + 1

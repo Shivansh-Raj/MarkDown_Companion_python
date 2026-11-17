@@ -16,6 +16,7 @@ from ..voice import capture
 from ..voice.service import VoiceService
 from ..voice.transcript import (MODE_LABELS, format_clock, note_system_prompt, note_user_prompt, suggest_file_name,
                                 transcript_markdown, transcript_text, word_count)
+from .chrome import scrolled
 from .flow_layout import FlowLayout
 from .fonts import use_body_font
 from .rich import set_markdown, style_browser
@@ -72,7 +73,7 @@ class VoiceWindow(QWidget):
         self.stack = QStackedWidget()
         self.stack.addWidget(self._home_page())
         self.stack.addWidget(self._setup_page())
-        self.stack.addWidget(self._scrolled(self._session_page()))
+        self.stack.addWidget(scrolled(self._session_page()))
         self.status = QLabel()
         self.status.setObjectName("status")
         self.status.setWordWrap(True)
@@ -85,17 +86,6 @@ class VoiceWindow(QWidget):
         service.level.connect(self._on_level)
         service.notice.connect(lambda kind, msg: self.show_status(msg, "error" if kind == "error" else "info"))
         self._refresh()
-
-    @staticmethod
-    def _scrolled(page: QWidget) -> QScrollArea:
-        """Wrap a page so a short window scrolls instead of forcing a large minimum size."""
-        sc = QScrollArea()
-        sc.setWidgetResizable(True)
-        sc.setObjectName("aiscroll")
-        sc.setFrameShape(QScrollArea.Shape.NoFrame)
-        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        sc.setWidget(page)
-        return sc
 
     # ------------------------------------------------------------------ pages ----
     def _home_page(self) -> QWidget:

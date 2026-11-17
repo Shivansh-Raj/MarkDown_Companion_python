@@ -9,7 +9,7 @@ from ..ai.create import (DOC_TYPE_LABELS, build_system_prompt, split_type_line, 
                          write_new_file)
 from ..ai.services import AiServices
 from ..ai.worker import StreamWorker
-from .chrome import EdgeResize, build_chrome, chrome_flags
+from .chrome import EdgeResize, build_chrome, chrome_flags, scrolled
 from .fonts import use_body_font
 from .pixel_icon import app_icon
 from .rich import set_markdown, style_browser
@@ -29,14 +29,14 @@ class AiCreateWindow(EdgeResize, QDialog):
         self.setWindowTitle("Markdown Companion V2 - New file with AI")
         self.setWindowIcon(app_icon())
         use_body_font(self, 12)                     # same text look as the Markdown view (and follows the Text size setting)
-        self.setMinimumSize(460, 520)
+        self.setMinimumSize(340, 300)                # compact is fine: pages scroll and button rows wrap when space runs out
         self.resize(500, 580)
         self.title_bar, root = build_chrome(self, "NEW WITH AI")
         self.title_bar.minimize_clicked.connect(lambda: self.showMinimized())
         self.title_bar.close_clicked.connect(self.close)
 
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._key_page())
+        self.stack.addWidget(scrolled(self._key_page()))
         self.stack.addWidget(self._prompt_page())
         self.stack.addWidget(self._run_page())
         self.error = QLabel()
@@ -77,14 +77,28 @@ class AiCreateWindow(EdgeResize, QDialog):
         lay.addStretch(1)
         return w
 
+    @staticmethod
+    def _pinned(content: QWidget, *rows) -> QWidget:
+        """A page whose content scrolls when the window is short while its button rows stay pinned at the bottom."""
+        page = QWidget()
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(8)
+        v.addWidget(scrolled(content), 1)
+        for r in rows:
+            v.addLayout(r)
+        return page
+
     def _prompt_page(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
         title = QLabel("WHAT SHOULD I WRITE?")
         title.setObjectName("section")
         self.prompt = QPlainTextEdit()
         self.prompt.setPlaceholderText("e.g. Plan my product launch next week")
         self.prompt.setObjectName("editor")
+        self.prompt.setMinimumHeight(70)
         self.type_box = QComboBox()
         for tid, label in DOC_TYPE_LABELS.items():
             self.type_box.addItem(label, tid)
@@ -93,30 +107,33 @@ class AiCreateWindow(EdgeResize, QDialog):
         self.gen_btn.clicked.connect(self.generate)
         key_btn = QPushButton("Key")
         key_btn.clicked.connect(lambda: self._show_key(editing=True))
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Type"))
-        row.addWidget(self.type_box)
-        row.addStretch(1)
-        row.addWidget(key_btn)
-        row.addWidget(self.gen_btn)
         lay.addWidget(title)
         lay.addWidget(self.prompt, 1)
-        lay.addLayout(row)
-        return w
+        type_row = QHBoxLayout()                         # two short rows instead of one long one: nothing needs to wrap
+        type_row.addWidget(QLabel("Type"))
+        type_row.addWidget(self.type_box, 1)
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        action_row.addWidget(key_btn)
+        action_row.addWidget(self.gen_btn)
+        return self._pinned(w, type_row, action_row)
 
     def _run_page(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
         top = QHBoxLayout()
-        self.cat = TypingCat(self.ai.theme_name(), self.ai.animations())
+        self.cat = TypingCat(self.ai.theme_name(), self.ai.animations(), scale=2)    # 64 px: leaves room in a small window
         self.run_label = QLabel("Thinking")
         self.run_label.setObjectName("section")
+        self.run_label.setWordWrap(True)
         top.addWidget(self.cat)
         top.addWidget(self.run_label, 1)
         self.preview = QTextBrowser()
         self.preview.setObjectName("preview")
         self.preview.setOpenLinks(False)
         style_browser(self.preview, self.ai.theme_name())
+        self.preview.setMinimumHeight(90)
         self.stop_btn = QPushButton("■  Stop")
         self.stop_btn.clicked.connect(self.stop)
         self.save_btn = QPushButton("Save && open")
@@ -131,8 +148,7 @@ class AiCreateWindow(EdgeResize, QDialog):
         row.addStretch(1)
         lay.addLayout(top)
         lay.addWidget(self.preview, 1)
-        lay.addLayout(row)
-        return w
+        return self._pinned(w, row)
 
     # navigation ---------------------------------------------------------------------------
     def show_error(self, text: str = "") -> None:

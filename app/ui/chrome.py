@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget
 
 from .markdown_window import CORNER, EDGE
 from .title_bar import TitleBar
@@ -15,6 +15,17 @@ _E = Qt.Edge
 def chrome_flags(dialog: bool = False) -> Qt.WindowType:
     base = Qt.WindowType.Dialog if dialog else Qt.WindowType.Window
     return base | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+
+
+def scrolled(page: QWidget) -> QScrollArea:
+    """Wrap a page so a short window scrolls instead of forcing a large minimum size."""
+    sc = QScrollArea()
+    sc.setWidgetResizable(True)
+    sc.setObjectName("aiscroll")
+    sc.setFrameShape(QScrollArea.Shape.NoFrame)
+    sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    sc.setWidget(page)
+    return sc
 
 
 def build_chrome(window: QWidget, title: str, buttons: tuple[str, ...] = ("minimize", "close")) -> tuple[TitleBar, QVBoxLayout]:
