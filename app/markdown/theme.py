@@ -180,4 +180,6 @@ def chrome_qss(theme_id: str, v1_borders: bool = False) -> str:
     extra = {"acc_hi": mix(t["accent"], "#ffffff", 0.28), "acc_lo": mix(t["accent"], "#000000", 0.22),
              "alt_hi": mix(t["bg_alt"], "#ffffff", 0.10), "bg_hi": mix(t["bg"], "#ffffff", 0.06),
              "danger_bg": "#ffd9d4" if QColor(t["bg"]).lightness() > 128 else "#4a2530"}      # error banner, as in V1
-    return (_QSS if v1_borders else _QSS + _BEVEL) % {"accent_ink": t["bg"], **extra, **t}        # text on accent colour defaults to the background
+    css = (_QSS if v1_borders else _QSS + _BEVEL) % {"accent_ink": t["bg"], **extra, **t}
+    from ..ui import scale
+    return scale.scale_sizes(css)                       # every font-size follows the Text size setting        # text on accent colour defaults to the background

@@ -11,7 +11,8 @@ from ..ai.services import AiServices
 from ..ai.worker import StreamWorker
 from ..markdown.renderer import render_markdown
 from ..markdown.theme import load_theme
-from .fonts import PIXEL, body_font
+from . import scale
+from .fonts import PIXEL, use_body_font
 from .rich import style_browser
 
 EXAMPLES = ("What is still left to do?", "Summarise this file in three bullets.", "What is due soonest?")
@@ -22,7 +23,7 @@ def conversation_html(turns: list[ask.Turn], theme_id: str, asked: str | None = 
     t = load_theme(theme_id)
 
     def tag(text: str) -> str:
-        return (f'<span style="background-color:{t["bg_alt"]}; color:{t["fg"]}; font-family:{PIXEL}; font-size:9px;">'
+        return (f'<span style="background-color:{t["bg_alt"]}; color:{t["fg"]}; font-family:{PIXEL}; font-size:{scale.px(9)}px;">'
                 f"&nbsp;{text}&nbsp;</span>")
 
     def question(q: str) -> str:
@@ -41,7 +42,7 @@ def conversation_html(turns: list[ask.Turn], theme_id: str, asked: str | None = 
         quotes = ask.visible_quotes(turn)
         if quotes:
             body = "<br>".join(f"<i>“{html.escape(q)}”</i>" for q in quotes)
-            out.append(f'<p style="margin:2px 0 0 0; color:{t["muted"]}; font-family:{PIXEL}; font-size:9px;">Quotes from the file</p>'
+            out.append(f'<p style="margin:2px 0 0 0; color:{t["muted"]}; font-family:{PIXEL}; font-size:{scale.px(9)}px;">Quotes from the file</p>'
                        f'<table width="100%" cellspacing="0" cellpadding="0"><tr><td width="3" bgcolor="{t["accent"]}"></td>'
                        f'<td style="padding-left:8px; color:{t["muted"]};">{body}</td></tr></table>')
         elif ask.needs_quote_warning(turn):
@@ -102,7 +103,7 @@ class AskPanel(QWidget):
         self.error.setWordWrap(True)
         self.error.hide()
 
-        self.setFont(body_font(12))                              # same text look as the Markdown view
+        use_body_font(self, 12)                                  # same text look as the Markdown view (and follows the Text size setting)
         self.log = QTextBrowser()
         self.log.setObjectName("preview")
         self.log.setOpenLinks(False)
@@ -241,6 +242,10 @@ class AskPanel(QWidget):
             self._worker.cancel()
 
     # view ------------------------------------------------------------------------------
+    def refresh_text(self) -> None:
+        """Text size changed: rebuild the conversation so the sizes inside it follow."""
+        self._render()
+
     def _render(self) -> None:
         bar = self.log.verticalScrollBar()
         self.log.document().setDefaultStyleSheet(self.log.document().defaultStyleSheet())

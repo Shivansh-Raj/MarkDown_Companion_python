@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..markdown.theme import chrome_qss
 from ..ui.button_fx import ButtonFx
+from ..ui import fonts, rich, scale
 from ..ui.fonts import load_fonts
 from ..utils.macos import set_dock_icon_visible
 from ..services.persistence import Database
@@ -46,6 +47,8 @@ class CompanionApp(QObject):
         load_fonts()                                # the Silkscreen heading font, for Qt text as well as the Markdown pages
         self.db = Database(app_data_dir() / "companion.db")
         self.settings = SettingsManager(self.db, self)
+        scale.set_percent(self.settings.get("font_scale"))          # the Text size setting drives the whole interface
+        qapp.setFont(scale.scaled_app_font())
         self.files = FileManager(poll=poll, parent=self)
         self.windows = WindowManager(self.files, self.db, self.settings, self)
         self.shortcuts = ShortcutManager(backend, self)
@@ -171,13 +174,32 @@ class CompanionApp(QObject):
         if self._settings_win:
             self._settings_win.set_shortcut_status(self.shortcut_status or "Shortcuts registered.")
 
+    def apply_ui_scale(self) -> None:
+        """Text size changed: re-apply it everywhere, live - application font, style sheet, hand-set fonts, fixed-size widgets."""
+        pct = int(self.settings.get("font_scale"))
+        scale.set_percent(pct)
+        self.qapp.setFont(scale.scaled_app_font())
+        self.qapp.setStyleSheet(chrome_qss(self.settings.get("theme"), bool(self.settings.get("button_shadow"))))
+        fonts.rescale_all()
+        rich.rescale_browsers()
+        self.windows.apply_font_scale(pct)                          # the Markdown views zoom with the same percentage
+        for win in self.windows.windows():
+            win.rescale()
+            if win.ask_panel is not None:
+                win.ask_panel.refresh_text()
+        self.home.apply_scale()
+        if self._voice_win is not None:
+            self._voice_win.refresh_text()
+        if self._settings_win is not None:                      # grows so larger text is never cut off (it never shrinks on its own)
+            self._settings_win.rescale()
+
     def _on_setting_changed(self, key: str) -> None:
         if key in ("shortcut_primary", "shortcut_picker", "shortcut_home"):
             self._register_shortcuts()
         elif key == "hide_dock_icon":
             set_dock_icon_visible(not self.settings.get("hide_dock_icon"))
         elif key == "font_scale":
-            self.windows.apply_font_scale(self.settings.get("font_scale"))
+            self.apply_ui_scale()
         elif key in ("theme", "button_shadow"):
             theme, v1 = self.settings.get("theme"), bool(self.settings.get("button_shadow"))
             self.qapp.setStyleSheet(chrome_qss(theme, v1))

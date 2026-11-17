@@ -20,6 +20,17 @@ def qapp():
     return app
 
 
+@pytest.fixture(autouse=True)
+def _reset_text_scale(qapp):
+    """The Text size setting is process-wide state: every test starts and ends at 100%."""
+    from app.ui import scale
+    scale.set_percent(100)
+    qapp.setFont(scale.scaled_app_font())
+    yield
+    scale.set_percent(100)
+    qapp.setFont(scale.scaled_app_font())
+
+
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch):
     d = tmp_path / "appdata"

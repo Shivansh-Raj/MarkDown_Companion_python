@@ -5,8 +5,14 @@ from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QToolButton, QWidget
 
-HEIGHT = 30
+from . import scale
+
+HEIGHT = 30                       # at 100% text size; use height() for the real, scaled value
 BTN_W, BTN_WIDE_W, BTN_H = 21, 40, 21
+
+
+def height() -> int:
+    return scale.px(HEIGHT)
 
 
 class ElidedLabel(QLabel):
@@ -56,7 +62,8 @@ class TitleBar(QWidget):
         super().__init__(parent)
         self.setObjectName("titlebar")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setFixedHeight(HEIGHT)
+        self.setFixedHeight(height())
+        self._buttons: list[QToolButton] = []
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 3, 6, 3)
         lay.setSpacing(3)
@@ -94,12 +101,23 @@ class TitleBar(QWidget):
         b.setToolTip(tip)
         b.setCursor(Qt.CursorShape.PointingHandCursor)
         b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        b.setFixedSize(BTN_WIDE_W if role == "wide" else BTN_W, BTN_H)   # never squeezed by the layout
+        b.setFixedSize(*self._button_size(role))                        # never squeezed by the layout
         if role:
             b.setProperty("role", role)
         b.clicked.connect(signal)
         self.layout().addWidget(b)
+        self._buttons.append(b)
         return b
+
+    @staticmethod
+    def _button_size(role: str) -> tuple[int, int]:
+        return scale.px(BTN_WIDE_W if role == "wide" else BTN_W), scale.px(BTN_H)
+
+    def rescale(self) -> None:
+        """The Text size setting changed: buttons and bar keep fitting their (larger or smaller) text."""
+        self.setFixedHeight(height())
+        for b in self._buttons:
+            b.setFixedSize(*self._button_size(b.property("role") or ""))
 
     def set_editing(self, editing: bool, available: bool = True) -> None:
         if self.edit_btn is not None:

@@ -9,7 +9,7 @@ from ..ai.create import (DOC_TYPE_LABELS, build_system_prompt, split_type_line, 
                          write_new_file)
 from ..ai.services import AiServices
 from ..ai.worker import StreamWorker
-from .fonts import body_font
+from .fonts import use_body_font
 from .rich import set_markdown, style_browser
 from .typing_cat import TypingCat
 
@@ -26,7 +26,7 @@ class AiCreateWindow(QDialog):
         self._raw = ""
         self.setWindowTitle("Markdown Companion V2 - New file with AI")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
-        self.setFont(body_font(12))                 # same text look as the Markdown view
+        use_body_font(self, 12)                     # same text look as the Markdown view (and follows the Text size setting)
         self.setMinimumSize(460, 520)
 
         self.stack = QStackedWidget()

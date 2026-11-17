@@ -20,7 +20,8 @@ from ..voice import followups as fu
 from ..voice import export, session, templates as tpl
 from ..services.synchronization import read_snapshot
 from .flow_layout import FlowLayout
-from .fonts import body_font
+from . import scale
+from .fonts import use_body_font
 from .rich import set_markdown, style_browser
 from ..voice.transcript import date_stamp, format_clock, suggest_file_name, transcript_text, word_count
 
@@ -40,7 +41,7 @@ class ExportDialog(QDialog):
         super().__init__(parent)
         self.meta, self.sections, self.doc_title, self.ai, self.db, self.sync = meta, sections, doc_title, ai, db, sync
         self._folder: str | None = None                    # None = the default save folder
-        self.setFont(body_font(12))                        # same text look as the Markdown view
+        use_body_font(self, 12)                            # same text look as the Markdown view (and follows the Text size setting)
         self.setWindowTitle("Export as Markdown")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.setMinimumSize(520, 560)
@@ -484,7 +485,8 @@ class PracticePanel(QWidget):
         for key, caption in (("wpm", "words / min overall"), ("articulation", "while speaking"), ("fillers", "filler words"), ("pauses", "pauses ≥ 1.5 s")):
             box = QVBoxLayout()
             value = QLabel("–")
-            value.setStyleSheet(f"font-size: 20px; font-weight: bold; color: {self._t['accent']};")
+            use_body_font(value, 20, bold=True)
+            value.setStyleSheet(f"color: {self._t['accent']};")
             cap = QLabel(caption)
             cap.setObjectName("hint")
             box.addWidget(value)
@@ -639,7 +641,7 @@ class PracticePanel(QWidget):
         rep = ([f"Word “{w.term}” × {w.count}" for w in a.repeated_words] + [f"Phrase “{p.term}” × {p.count}" for p in a.repeated_phrases]
                + [f"“{p}”" + (f" at {format_clock(at)}" if at is not None else "") for p, at in a.stutters[:3]])
         pauses = ([f"{format_clock(p.start_ms)} · {p.duration_ms / 1000:.1f} s" for p in a.pauses.longest[:4]] if a.pauses else [])
-        return (ul("FILLERS", fillers, "None found") + "<span style='font-size:11px'>“like” and “actually” are sometimes used on purpose.</span><br>"
+        return (ul("FILLERS", fillers, "None found") + f"<span style='font-size:{scale.px(11)}px'>“like” and “actually” are sometimes used on purpose.</span><br>"
                 + ul("REPETITION", rep, "Nothing notable") + ul("PAUSES", pauses, "No long pauses" if a.has_timings else "No timing data"))
 
     # coach -------------------------------------------------------------------------------

@@ -13,7 +13,8 @@ from ..markdown.renderer import render_markdown
 from ..services.synchronization import ToggleStatus
 from .markdown_view import create_view
 from .flow_layout import FlowLayout
-from .title_bar import HEIGHT as TITLE_H, TitleBar
+from . import title_bar as _tb
+from .title_bar import TitleBar
 
 EDGE = 6                      # resize/shadow margin around the frame
 CORNER = 14
@@ -110,7 +111,7 @@ class MarkdownWindow(QWidget):
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
-        self.setMinimumSize(MIN_W, TITLE_H + 2 * EDGE + 4)
+        self.setMinimumSize(MIN_W, self._compact_height())
         self.resize(*DEFAULT_SIZE)
         self.setWindowTitle(os.path.basename(path))
 
@@ -493,12 +494,23 @@ class MarkdownWindow(QWidget):
         self.set_compact(not self._compact)
         self.state_changed.emit(self.key)
 
+    def _compact_height(self) -> int:
+        return _tb.height() + 2 * EDGE + 4
+
+    def rescale(self) -> None:
+        """The Text size setting changed: the rolled-up height and minimum height follow the (scaled) title bar."""
+        self.title_bar.rescale()
+        if self._compact:
+            self.setFixedHeight(self._compact_height())
+        else:
+            self.setMinimumHeight(self._compact_height())
+
     def set_compact(self, compact: bool) -> None:
         if compact == self._compact:
             return
         if compact:
             self._expanded_h = self.height()
-            h = TITLE_H + 2 * EDGE + 4
+            h = self._compact_height()
             self._compact = True
             self.view_box.hide()
             self.progress.hide()
@@ -506,7 +518,7 @@ class MarkdownWindow(QWidget):
             self.setFixedHeight(h)
         else:
             self._compact = False
-            self.setMinimumHeight(TITLE_H + 2 * EDGE + 4)
+            self.setMinimumHeight(self._compact_height())
             self.setMaximumHeight(16777215)
             self.view_box.show()
             self.progress.setVisible(self._has_tasks)

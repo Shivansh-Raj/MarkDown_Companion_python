@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QTextBrowser, QWidget
 from ..markdown.html_template import CONTENT_ID, build_page
 from ..markdown.theme import load_theme
 from ..utils.logging_config import get_logger
+from . import scale
 
 log = get_logger("view")
 ACTION_HOST = "mdc.invalid"
@@ -67,7 +68,8 @@ class FallbackMarkdownView(QTextBrowser):
         self.setOpenLinks(False)
         self.setFrameShape(QTextBrowser.Shape.NoFrame)
         self.anchorClicked.connect(lambda url: _route_link(url, self))
-        self._base_pt = self.font().pointSizeF()
+        # the zoom is relative to the platform's own size: the app font is already scaled by the Text size setting
+        self._base_pt = scale.base_font().pointSizeF() if scale.base_font().pointSizeF() > 0 else self.font().pointSizeF()
 
     def set_zoom(self, factor: float) -> None:
         f = self.font()

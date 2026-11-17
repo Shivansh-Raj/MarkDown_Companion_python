@@ -3,16 +3,17 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QKeySequenceEdit,
-                               QLabel, QLineEdit, QPushButton, QSlider, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLayout, QKeySequenceEdit,
+                               QLabel, QLineEdit, QPushButton, QSlider, QVBoxLayout, QWidget)
 
 from ..ai.worker import KeyTestWorker
 
 from ..core.settings_manager import SettingsManager
 from ..markdown.theme import list_themes
-from .fonts import body_font, pixel_font
+from . import scale
+from .fonts import use_body_font, use_pixel_font
 
 
 def _seq_text(edit: QKeySequenceEdit) -> str:
@@ -24,7 +25,7 @@ class SettingsWindow(QDialog):
 
     def __init__(self, settings: SettingsManager, shortcut_status: str = "", ai=None):
         super().__init__()
-        self.setFont(body_font(12))                  # same text look as the Markdown view
+        use_body_font(self, 12)                      # same text look as the Markdown view (and follows the Text size setting)
         self.settings = settings
         self.ai = ai
         self._test: KeyTestWorker | None = None
@@ -59,6 +60,7 @@ class SettingsWindow(QDialog):
         self.font_scale = QSlider(Qt.Orientation.Horizontal)
         self.font_scale.setRange(60, 200)
         self.font_scale.setSingleStep(10)
+        self.font_scale.setToolTip("Scales all text in the app: buttons, labels, lists and the Markdown view. Applies when you press Apply.")
         self.font_scale.setValue(int(settings.get("font_scale")))
         self._font_label = QLabel(f"{self.font_scale.value()}%")
         self.font_scale.valueChanged.connect(lambda v: self._font_label.setText(f"{v}%"))
@@ -139,8 +141,23 @@ class SettingsWindow(QDialog):
         for i in range(form.rowCount()):                 # row labels in the pixel font, like the Markdown view's headings
             item = form.itemAt(i, QFormLayout.ItemRole.LabelRole)
             if item is not None and item.widget() is not None:
-                item.widget().setFont(pixel_font(11))
-        self.setMinimumWidth(520)
+                use_pixel_font(item.widget(), 11)
+        # The dialog sizes itself from its content (so larger text is never cut off); the strut keeps a sensible minimum width.
+        self._strut = QWidget()
+        self._strut.setFixedHeight(0)
+        self._strut.setMinimumWidth(scale.px(500))
+        root.addWidget(self._strut)
+        root.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+
+    def rescale(self) -> None:
+        """Text size changed: keep the minimum width in proportion and grow the window to fit its larger content."""
+        self._strut.setMinimumWidth(scale.px(500))
+        self.layout().invalidate()
+        QTimer.singleShot(0, self._fit)
+
+    def _fit(self) -> None:
+        hint = self.sizeHint()
+        self.resize(max(self.width(), hint.width()), max(self.height(), hint.height()))
 
     # AI ----------------------------------------------------------------------------------------
     def _save_key(self) -> None:

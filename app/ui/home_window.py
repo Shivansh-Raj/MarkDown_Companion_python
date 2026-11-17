@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QFont, QKeySequence, QMouseEvent, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
                                QPushButton, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget)
 
 from ..markdown.theme import load_theme
+from . import scale
 from .markdown_window import CORNER, EDGE
 from .pixel_icon import app_icon
 from .title_bar import TitleBar
@@ -17,7 +18,7 @@ from .typing_cat import TypingCat
 MD_EXT = (".md", ".markdown", ".mdown", ".txt")
 _PATH, _KEY, _OPEN, _MISSING = (Qt.ItemDataRole.UserRole + n for n in range(4))
 _E = Qt.Edge
-ROW_H = 46
+ROW_H = 46                                              # at 100% text size; sizes below go through scale.px()
 
 
 class _Search(QLineEdit):
@@ -48,7 +49,7 @@ class _RowDelegate(QStyledItemDelegate):
         self._colors = colors                              # callable returning the current theme
 
     def sizeHint(self, option, index) -> QSize:  # noqa: N802
-        return QSize(option.rect.width(), ROW_H)
+        return QSize(option.rect.width(), scale.px(ROW_H))
 
     def paint(self, p: QPainter, option, index) -> None:
         t = self._colors()
@@ -63,33 +64,34 @@ class _RowDelegate(QStyledItemDelegate):
         p.drawLine(r.left() + 1, r.bottom(), r.right() - 1, r.bottom())
         name = QFont(option.font)
         name.setBold(True)
-        name.setPointSizeF(max(9.0, option.font.pointSizeF() * 1.05))
-        right = r.right() - 10
+        name.setPointSizeF(max(9.0 * scale.get(), option.font.pointSizeF() * 1.05))
+        right = r.right() - scale.px(10)
         badge = "MISSING" if missing else ("OPEN" if index.data(_OPEN) else "")
         if badge:
             bf = QFont("Consolas, Menlo, monospace")
             bf.setStyleHint(QFont.StyleHint.Monospace)
             bf.setBold(True)
-            bf.setPixelSize(10)
+            bf.setPixelSize(scale.px(10))
             p.setFont(bf)
-            w = p.fontMetrics().horizontalAdvance(badge) + 10
-            box = QRect(right - w, r.top() + 7, w, 16)
+            w = p.fontMetrics().horizontalAdvance(badge) + scale.px(10)
+            box = QRect(right - w, r.top() + scale.px(7), w, scale.px(16))
             p.setPen(QPen(ink, 2))
             p.drawRect(box.adjusted(1, 1, -1, -1))
             p.drawText(box, Qt.AlignmentFlag.AlignCenter, badge)
-            right = box.left() - 8
+            right = box.left() - scale.px(8)
         p.setFont(name)
         p.setPen(QColor(t["muted"] if missing and not selected else ink))
-        p.drawText(QRect(r.left() + 10, r.top() + 5, max(right - r.left() - 10, 10), 20), Qt.AlignmentFlag.AlignVCenter,
-                   p.fontMetrics().elidedText(index.data(Qt.ItemDataRole.DisplayRole) or "", Qt.TextElideMode.ElideRight, max(right - r.left() - 10, 10)))
+        left, room = r.left() + scale.px(10), max(right - r.left() - scale.px(10), 10)
+        p.drawText(QRect(left, r.top() + scale.px(5), room, scale.px(20)), Qt.AlignmentFlag.AlignVCenter,
+                   p.fontMetrics().elidedText(index.data(Qt.ItemDataRole.DisplayRole) or "", Qt.TextElideMode.ElideRight, room))
         small = QFont(option.font)
-        small.setPixelSize(11)
+        small.setPixelSize(scale.px(11))
         p.setFont(small)
         folder = os.path.dirname(index.data(_PATH) or "") or "/"
         ink.setAlphaF(0.75)
         p.setPen(ink)
-        p.drawText(QRect(r.left() + 10, r.top() + 25, r.width() - 20, 16), Qt.AlignmentFlag.AlignVCenter,
-                   p.fontMetrics().elidedText(folder, Qt.TextElideMode.ElideMiddle, r.width() - 20))
+        p.drawText(QRect(left, r.top() + scale.px(25), r.width() - 2 * scale.px(10), scale.px(16)), Qt.AlignmentFlag.AlignVCenter,
+                   p.fontMetrics().elidedText(folder, Qt.TextElideMode.ElideMiddle, r.width() - 2 * scale.px(10)))
         p.restore()
 
 
@@ -203,6 +205,8 @@ class HomeWindow(QWidget):
         self.cat.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.cat.raise_()
         QShortcut(QKeySequence("Ctrl+,"), self, activated=self.settings_requested.emit)
+        self._cat_timer = QTimer(self, singleShot=True, interval=0)       # owned by the window, so it dies with it
+        self._cat_timer.timeout.connect(self._place_cat)
 
         wm_signal = getattr(window_manager, "windows_changed", None)
         if wm_signal is not None:
@@ -218,8 +222,8 @@ class HomeWindow(QWidget):
         b.setProperty("v1", True)
         b.setProperty("primary", primary)
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setMinimumHeight(32)
-        b.setMinimumWidth(len(text) * 8 + 24)               # asymmetric borders can make Qt's size hint too small
+        b.setMinimumHeight(scale.px(32))
+        b.setMinimumWidth(scale.px(len(text) * 8 + 24))     # asymmetric borders can make Qt's size hint too small
         return self._decorate(b)
 
     def _decorate(self, b: QPushButton) -> QPushButton:
@@ -229,6 +233,17 @@ class HomeWindow(QWidget):
         fx.setColor(QColor(self._theme()["shadow"]))
         b.setGraphicsEffect(fx)
         return b
+
+    def apply_scale(self) -> None:
+        """The Text size setting changed: rows, buttons and the cat position follow it."""
+        for b in self.findChildren(QPushButton):
+            if b.property("v1"):
+                b.setMinimumHeight(scale.px(32))
+                b.setMinimumWidth(scale.px(len(b.text()) * 8 + 24))
+        self.title_bar.rescale()
+        self.results.scheduleDelayedItemsLayout()
+        self.results.viewport().update()
+        self._cat_timer.start()                              # after the layout has settled at the new size
 
     def apply_theme(self) -> None:
         """Called when the theme changes: shadows and the cat follow it, the list repaints."""

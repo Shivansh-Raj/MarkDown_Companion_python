@@ -14,7 +14,7 @@ from ..ai.services import AiServices
 from ..markdown.theme import load_theme
 from ..ai.worker import StreamWorker
 from .flow_layout import FlowLayout
-from .fonts import body_font
+from .fonts import use_body_font
 from .typing_cat import TypingCat
 
 QUICK_ACTIONS = (
@@ -42,7 +42,7 @@ class AiEditPanel(QWidget):
 
     def __init__(self, ai: AiServices, parent=None):
         super().__init__(parent)
-        self.setFont(body_font(12))                  # same text look as the Markdown view
+        use_body_font(self, 12)                      # same text look as the Markdown view (and follows the Text size setting)
         self.setObjectName("aipanel")
         self.ai = ai
         self._worker: StreamWorker | None = None

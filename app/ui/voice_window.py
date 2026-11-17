@@ -17,7 +17,7 @@ from ..voice.service import VoiceService
 from ..voice.transcript import (MODE_LABELS, format_clock, note_system_prompt, note_user_prompt, suggest_file_name,
                                 transcript_markdown, transcript_text, word_count)
 from .flow_layout import FlowLayout
-from .fonts import body_font
+from .fonts import use_body_font
 from .rich import set_markdown, style_browser
 from .pixel_icon import app_icon
 from .voice_panels import AnalysisPanel, PracticePanel, QuestionStrip
@@ -57,7 +57,7 @@ class VoiceWindow(QWidget):
     def __init__(self, service: VoiceService, ai, db=None, sync=None):
         super().__init__(None, Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
         self.svc, self.ai, self.db, self.sync = service, ai, db, sync
-        self.setFont(body_font(12))                # same text look as the Markdown view
+        use_body_font(self, 12)                    # same text look as the Markdown view (and follows the Text size setting)
         self.setObjectName("home")                 # themed background like the home screen
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setWindowTitle("Voice Intelligence")
@@ -114,8 +114,10 @@ class VoiceWindow(QWidget):
             inner.setContentsMargins(8, 6, 8, 6)
             head, body = QLabel(label), QLabel(hint)
             t = load_theme(self.ai.theme_name())
-            head.setStyleSheet(f"font-weight: bold; font-size: 13px; background: transparent; color: {t['fg']};")
-            body.setStyleSheet(f"font-size: 11px; background: transparent; color: {t['muted']};")
+            use_body_font(head, 13, bold=True)
+            use_body_font(body, 11)
+            head.setStyleSheet(f"background: transparent; color: {t['fg']};")
+            body.setStyleSheet(f"background: transparent; color: {t['muted']};")
             body.setWordWrap(True)
             for lbl in (head, body):
                 lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
@@ -493,6 +495,11 @@ class VoiceWindow(QWidget):
         if not parts:
             return f'<p style="color:{muted}">{"Listening… text appears a few seconds after you speak." if self.svc.recording else "No speech was captured."}</p>'
         return "".join(parts)
+
+    def refresh_text(self) -> None:
+        """Text size changed: redraw the parts whose sizes are built into their text."""
+        self._refresh()
+        self.practice.refresh()
 
     def _refresh(self) -> None:
         phase, meta = self.svc.phase, self.svc.meta
