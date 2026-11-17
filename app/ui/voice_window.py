@@ -16,6 +16,7 @@ from ..voice import capture
 from ..voice.service import VoiceService
 from ..voice.transcript import (MODE_LABELS, format_clock, note_system_prompt, note_user_prompt, suggest_file_name,
                                 transcript_markdown, transcript_text, word_count)
+from .flow_layout import FlowLayout
 from .pixel_icon import app_icon
 from .voice_panels import AnalysisPanel, PracticePanel, QuestionStrip
 
@@ -58,7 +59,7 @@ class VoiceWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setWindowTitle("Voice Intelligence")
         self.setWindowIcon(app_icon())
-        self.setMinimumSize(520, 560)
+        self.setMinimumSize(380, 300)                      # compact is fine: the recording page scrolls when space runs out
         self.resize(640, 680)
         self._mode = "meeting"
         self._armed: str | None = None            # two-click delete confirmation
@@ -68,7 +69,7 @@ class VoiceWindow(QWidget):
         self.stack = QStackedWidget()
         self.stack.addWidget(self._home_page())
         self.stack.addWidget(self._setup_page())
-        self.stack.addWidget(self._session_page())
+        self.stack.addWidget(self._scrolled(self._session_page()))
         self.status = QLabel()
         self.status.setObjectName("status")
         self.status.setWordWrap(True)
@@ -81,6 +82,17 @@ class VoiceWindow(QWidget):
         service.level.connect(self._on_level)
         service.notice.connect(lambda kind, msg: self.show_status(msg, "error" if kind == "error" else "info"))
         self._refresh()
+
+    @staticmethod
+    def _scrolled(page: QWidget) -> QScrollArea:
+        """Wrap a page so a short window scrolls instead of forcing a large minimum size."""
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        sc.setObjectName("aiscroll")
+        sc.setFrameShape(QScrollArea.Shape.NoFrame)
+        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        sc.setWidget(page)
+        return sc
 
     # ------------------------------------------------------------------ pages ----
     def _home_page(self) -> QWidget:
@@ -219,13 +231,8 @@ class VoiceWindow(QWidget):
         lay.addWidget(self.analysis, 1)
         self.practice = PracticePanel(self.svc, self.ai, self.db, self.sync)
         self.practice.file_created.connect(self.file_created)
-        self.practice_scroll = QScrollArea()                 # the coaching view is taller than the window: let it scroll
-        self.practice_scroll.setWidgetResizable(True)
-        self.practice_scroll.setObjectName("aiscroll")
-        self.practice_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.practice_scroll.setWidget(self.practice)
-        self.practice_scroll.hide()
-        lay.addWidget(self.practice_scroll, 2)
+        self.practice.hide()
+        lay.addWidget(self.practice, 2)
         self.info = QLabel()
         self.info.setObjectName("hint")
         self.info.setWordWrap(True)
@@ -250,11 +257,9 @@ class VoiceWindow(QWidget):
         self.back_btn = QPushButton("← Back")
         self.back_btn.clicked.connect(self._back)
         self.actions = QWidget()
-        arow = QHBoxLayout(self.actions)
-        arow.setContentsMargins(0, 0, 0, 0)
+        arow = FlowLayout(self.actions, 0, 6, 6)
         for b in (self.save_tr_btn, self.note_btn, self.save_note_btn, self.retry_btn, self.retr_btn, self.del_audio_btn, self.del_sess_btn, self.back_btn):
             arow.addWidget(b)
-        arow.addStretch(1)
         lay.addWidget(self.actions)
         return w
 
@@ -523,7 +528,7 @@ class VoiceWindow(QWidget):
             self.questions.reset()                           # a new meeting recording starts with a clean slate
         self.questions.setVisible(live_meeting)
         is_practice = stopped and bool(meta and meta.mode == "practice")
-        self.practice_scroll.setVisible(is_practice)
+        self.practice.setVisible(is_practice)
         if is_practice:
             self.practice.set_session(meta)
             self.practice.refresh()

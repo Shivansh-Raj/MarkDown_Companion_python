@@ -19,7 +19,15 @@ from ..voice import coach as co
 from ..voice import followups as fu
 from ..voice import export, session, templates as tpl
 from ..services.synchronization import read_snapshot
+from .flow_layout import FlowLayout
 from ..voice.transcript import date_stamp, format_clock, suggest_file_name, transcript_text, word_count
+
+
+def _compact_tabs(tabs: QTabWidget) -> None:
+    """Tabs that shrink (eliding their titles) instead of forcing the window wide."""
+    tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
+    tabs.tabBar().setUsesScrollButtons(False)
+    tabs.tabBar().setExpanding(False)
 
 
 class ExportDialog(QDialog):
@@ -223,14 +231,12 @@ class AnalysisPanel(QWidget):
         self.stop_btn.clicked.connect(self.stop)
         self.export_btn = QPushButton("Export as Markdown…")
         self.export_btn.clicked.connect(self.export)
-        row = QHBoxLayout()
+        row = FlowLayout(None, 0, 10, 4)
         for c in self.checks.values():
             row.addWidget(c)
-        row.addStretch(1)
-        row2 = QHBoxLayout()
+        row2 = FlowLayout(None, 0, 6, 4)
         for b in (self.generate_btn, self.stop_btn, self.export_btn):
             row2.addWidget(b)
-        row2.addStretch(1)
         self.hint = QLabel()
         self.hint.setObjectName("hint")
         self.hint.setWordWrap(True)
@@ -241,6 +247,7 @@ class AnalysisPanel(QWidget):
 
         self.views: dict[str, QTextBrowser] = {}
         self.tabs = QTabWidget()
+        _compact_tabs(self.tabs)
         for t in an.ANALYSIS_TYPES:
             tab = QWidget()
             tl = QVBoxLayout(tab)
@@ -515,6 +522,7 @@ class PracticePanel(QWidget):
         self.error.setWordWrap(True)
         self.error.hide()
         self.tabs = QTabWidget()
+        _compact_tabs(self.tabs)
         self.sentence_box = QVBoxLayout()
         holder = QWidget()
         holder.setLayout(self.sentence_box)
@@ -544,14 +552,12 @@ class PracticePanel(QWidget):
         lay.addWidget(self.caveat)
         lay.addWidget(self.hint)
         lay.addWidget(section("COACH"))
-        row = QHBoxLayout()
+        row = FlowLayout(None, 0, 10, 4)
         for c in self.checks.values():
             row.addWidget(c)
-        row.addStretch(1)
-        row2 = QHBoxLayout()
+        row2 = FlowLayout(None, 0, 6, 4)
         for b in (self.generate_btn, self.stop_btn, self.export_btn):
             row2.addWidget(b)
-        row2.addStretch(1)
         lay.addLayout(row)
         lay.addLayout(row2)
         lay.addWidget(self.error)
@@ -832,10 +838,9 @@ class FollowUpPanel(QWidget):
         self.view = QTextBrowser()
         self.view.setObjectName("preview")
         self.view.setOpenLinks(False)
-        row = QHBoxLayout()
-        for b in (self.check_btn, self.rethink_btn, self.stop_btn, self.export_btn):
+        row = FlowLayout(None, 0, 6, 4)
+        for b in (self.check_btn, self.rethink_btn, self.stop_btn, self.export_btn, self.status):
             row.addWidget(b)
-        row.addWidget(self.status, 1)
         lay = QVBoxLayout(self)
         lay.addWidget(note)
         lay.addLayout(row)

@@ -133,3 +133,26 @@ def test_a_start_error_is_shown_not_raised(app, monkeypatch):
     monkeypatch.setattr(app.voice.recorder, "start", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("No microphone found.")))
     w._start()
     assert w.status.isVisibleTo(w) and "No microphone" in w.status.text()
+
+
+def test_the_voice_window_can_be_made_small_and_the_page_scrolls_instead(app):
+    """The window used to refuse to shrink below 520x560; the recording view needs far less and scrolls when short."""
+    w = app._voice_win
+    assert w.minimumSize().width() <= 400 and w.minimumSize().height() <= 320
+    app.settings.set("voice_consent", True)
+    w.open_setup("meeting")
+    w._start()
+    w.resize(w.minimumSize())
+    assert w.width() <= 400 and w.height() <= 320                          # the OS can really make it that small
+    assert w.stack.currentWidget().widget() is not None                    # the session page lives in a scroll area
+    w.pause_btn.click()
+    w._stop()
+
+
+def test_the_action_buttons_wrap_instead_of_forcing_a_wide_window(app):
+    w = app._voice_win
+    assert w.actions.layout().hasHeightForWidth()
+    wide = w.actions.layout().heightForWidth(700)
+    narrow = w.actions.layout().heightForWidth(300)
+    assert narrow > wide                                                   # at 300 px the buttons take more rows
+    assert w.actions.minimumSizeHint().width() < 300                       # and no single row needs ~590 px any more

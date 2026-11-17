@@ -64,7 +64,7 @@ def coach_all(panel):
 
 def test_speaking_numbers_show_up_immediately_and_need_no_ai(ctx):
     app, w, p, state, _ = ctx
-    assert w.practice_scroll.isVisibleTo(w) and not w.analysis.isVisibleTo(w)
+    assert w.practice.isVisibleTo(w) and not w.analysis.isVisibleTo(w)
     assert state["calls"] == []                                           # nothing was sent to the AI
     a = p.analytics
     assert a.word_count == len(SAID.split()) and a.has_timings and a.wpm
@@ -153,4 +153,4 @@ def test_a_quick_note_session_shows_neither_coach_nor_meeting_panels(ctx):
     app.voice.recorder._on_pcm(tone(2000))
     w._stop()
     assert wait_for(lambda: app.voice.pending == 0 and app.voice._worker is None)
-    assert not w.practice_scroll.isVisibleTo(w) and not w.analysis.isVisibleTo(w)
+    assert not w.practice.isVisibleTo(w) and not w.analysis.isVisibleTo(w)
