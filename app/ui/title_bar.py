@@ -49,6 +49,7 @@ class TitleBar(QWidget):
     opacity_clicked = Signal()
     minimize_clicked = Signal()
     close_clicked = Signal()
+    settings_clicked = Signal()
 
     def __init__(self, title: str, parent: QWidget | None = None,
                  buttons: tuple[str, ...] = ("ai", "ask", "edit", "home", "compact", "refresh", "opacity", "minimize", "close")):
@@ -71,6 +72,8 @@ class TitleBar(QWidget):
             self.ask_btn = self._button("ASK", "Ask AI a question about this file", self.ask_clicked, role="wide")
         if "edit" in buttons:
             self.edit_btn = self._button("EDIT", "Edit the Markdown source (Ctrl+E)", self.edit_clicked, role="wide")
+        if "settings" in buttons:
+            self._button("⚙", "Settings (Ctrl+,)", self.settings_clicked)
         if "home" in buttons:
             self._button("⌂", "Home screen (Ctrl+Shift+H)", self.home_clicked)
         self.compact_btn = self._button("▴", "Roll up / expand (double-click title)", self.compact_clicked)

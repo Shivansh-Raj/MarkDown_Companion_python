@@ -82,3 +82,20 @@ def make_app(qapp, data_dir):
         a.home.deleteLater()                # windows from finished tests must not pile up: a live widget costs time
     from PySide6.QtCore import QCoreApplication, QEvent
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+_exit_status = {"code": None}
+
+
+def pytest_sessionfinish(session, exitstatus):
+    _exit_status["code"] = int(exitstatus)
+
+
+def pytest_unconfigure(config):
+    """Qt + QtWebEngine can segfault while the interpreter tears down after a long session (all tests have already finished and
+    the summary is printed). Exit straight away with pytest's real status so a passing run does not end in exit code 139."""
+    import sys
+    if _exit_status["code"] is not None:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(_exit_status["code"])

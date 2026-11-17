@@ -1,41 +1,99 @@
-"""Home screen: launchpad for recent files and open windows."""
+"""Home screen, styled like V1's launcher: a search box, one clean file list and a small footer. Nothing else."""
 from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QPoint, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QDragEnterEvent, QPainter, QDropEvent, QMouseEvent
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton,
-                               QVBoxLayout, QWidget, QGraphicsDropShadowEffect, QStyle, QStyleOption)
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QFont, QKeySequence, QMouseEvent, QPainter, QPen, QShortcut
+from PySide6.QtWidgets import (QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
+                               QPushButton, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget)
 
+from ..markdown.theme import load_theme
 from .markdown_window import CORNER, EDGE
 from .pixel_icon import app_icon
-from .pixel_stage import PixelStage
-from .typing_cat import TypingCat
 from .title_bar import TitleBar
+from .typing_cat import TypingCat
 
 MD_EXT = (".md", ".markdown", ".mdown", ".txt")
-_KEY = Qt.ItemDataRole.UserRole
-
-
+_PATH, _KEY, _OPEN, _MISSING = (Qt.ItemDataRole.UserRole + n for n in range(4))
 _E = Qt.Edge
+ROW_H = 46
 
 
-class _Crt(QWidget):
-    """Body panel with faint CRT scanlines painted over the themed background."""
+class _Search(QLineEdit):
+    """Search box that also drives the list from the keyboard (arrows move, Enter opens, Esc hides), like V1."""
+    move = Signal(int)
+    activate = Signal()
+    escape = Signal()
 
-    def paintEvent(self, e) -> None:  # noqa: N802
-        opt = QStyleOption()
-        opt.initFrom(self)
-        p = QPainter(self)
-        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
-        p.setPen(QColor(0, 0, 0, 28))
-        for y in range(0, self.height(), 3):
-            p.drawLine(0, y, self.width(), y)
+    def keyPressEvent(self, e) -> None:  # noqa: N802
+        k = e.key()
+        if k == Qt.Key.Key_Down:
+            self.move.emit(1)
+        elif k == Qt.Key.Key_Up:
+            self.move.emit(-1)
+        elif k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.activate.emit()
+        elif k == Qt.Key.Key_Escape:
+            self.escape.emit()
+        else:
+            super().keyPressEvent(e)
+
+
+class _RowDelegate(QStyledItemDelegate):
+    """V1's `.row`: bold name on the left, an outlined badge on the right, the folder in small muted text below."""
+
+    def __init__(self, colors, parent=None):
+        super().__init__(parent)
+        self._colors = colors                              # callable returning the current theme
+
+    def sizeHint(self, option, index) -> QSize:  # noqa: N802
+        return QSize(option.rect.width(), ROW_H)
+
+    def paint(self, p: QPainter, option, index) -> None:
+        t = self._colors()
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        missing = bool(index.data(_MISSING))
+        ink = QColor(t["accent_ink"] if selected else t["fg"])
+        p.save()
+        r = option.rect
+        if selected:
+            p.fillRect(r, QColor(t["accent"]))
+        p.setPen(QPen(QColor(t["muted"]), 1, Qt.PenStyle.DashLine))               # dashed row divider
+        p.drawLine(r.left() + 1, r.bottom(), r.right() - 1, r.bottom())
+        name = QFont(option.font)
+        name.setBold(True)
+        name.setPointSizeF(max(9.0, option.font.pointSizeF() * 1.05))
+        right = r.right() - 10
+        badge = "MISSING" if missing else ("OPEN" if index.data(_OPEN) else "")
+        if badge:
+            bf = QFont("Consolas, Menlo, monospace")
+            bf.setStyleHint(QFont.StyleHint.Monospace)
+            bf.setBold(True)
+            bf.setPixelSize(10)
+            p.setFont(bf)
+            w = p.fontMetrics().horizontalAdvance(badge) + 10
+            box = QRect(right - w, r.top() + 7, w, 16)
+            p.setPen(QPen(ink, 2))
+            p.drawRect(box.adjusted(1, 1, -1, -1))
+            p.drawText(box, Qt.AlignmentFlag.AlignCenter, badge)
+            right = box.left() - 8
+        p.setFont(name)
+        p.setPen(QColor(t["muted"] if missing and not selected else ink))
+        p.drawText(QRect(r.left() + 10, r.top() + 5, max(right - r.left() - 10, 10), 20), Qt.AlignmentFlag.AlignVCenter,
+                   p.fontMetrics().elidedText(index.data(Qt.ItemDataRole.DisplayRole) or "", Qt.TextElideMode.ElideRight, max(right - r.left() - 10, 10)))
+        small = QFont(option.font)
+        small.setPixelSize(11)
+        p.setFont(small)
+        folder = os.path.dirname(index.data(_PATH) or "") or "/"
+        ink.setAlphaF(0.75)
+        p.setPen(ink)
+        p.drawText(QRect(r.left() + 10, r.top() + 25, r.width() - 20, 16), Qt.AlignmentFlag.AlignVCenter,
+                   p.fontMetrics().elidedText(folder, Qt.TextElideMode.ElideMiddle, r.width() - 20))
+        p.restore()
 
 
 class HomeWindow(QWidget):
-    _TAG = "\u25aa NOTES \u25aa TASKS \u25aa AI \u25aa"
     open_dialog_requested = Signal()
     open_path_requested = Signal(str)
     focus_requested = Signal(str)       # window key
@@ -48,18 +106,17 @@ class HomeWindow(QWidget):
 
     def __init__(self, db, window_manager, settings):
         # Same chrome as the note windows: frameless, always on top, pixel frame, custom title bar.
-        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
-                         | Qt.WindowType.WindowStaysOnTopHint)
+        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self._db, self._wm, self._settings = db, window_manager, settings
         self.shortcut_status = ""
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
-        self.setMinimumSize(400, 580)
+        self.setMinimumSize(420, 420)
         self.setWindowTitle("Markdown Companion V2")
         self.setWindowIcon(app_icon())
         self.setAcceptDrops(True)
-        self.resize(480, 680)
+        self.resize(540, 520)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(EDGE, EDGE, EDGE, EDGE)
@@ -70,185 +127,181 @@ class HomeWindow(QWidget):
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(2, 2, 2, 2)
         fl.setSpacing(0)
-        self.title_bar = TitleBar("Markdown Companion", buttons=("minimize", "close"))
+        self.title_bar = TitleBar("MD COMPANION", buttons=("settings", "minimize", "close"))
+        self.title_bar.settings_clicked.connect(self.settings_requested)
         self.title_bar.minimize_clicked.connect(self.showMinimized)
-        self.title_bar.close_clicked.connect(self.hide)     # app keeps running in the tray
+        self.title_bar.close_clicked.connect(self.hide)     # the app keeps running in the tray
         fl.addWidget(self.title_bar)
-        body = _Crt()
-        body.setObjectName("home")
-        body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        fl.addWidget(body, 1)
+        self.body = QWidget()
+        self.body.setObjectName("launcher")
+        self.body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        fl.addWidget(self.body, 1)
 
-        root = QVBoxLayout(body)
-        root.setContentsMargins(18, 14, 18, 12)
+        root = QVBoxLayout(self.body)
+        root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(8)
 
-        hero = QLabel("MARKDOWN\nCOMPANION")
-        hero.setObjectName("hero")
-        glow = QGraphicsDropShadowEffect(hero)           # hard pixel drop shadow under the title
-        glow.setOffset(2, 2)
-        glow.setBlurRadius(0)
-        glow.setColor(QColor(0, 0, 0, 70))
-        hero.setGraphicsEffect(glow)
-        tagline = QLabel(self._TAG + "  ")
-        self.tagline = tagline
-        tagline.setObjectName("tagline")
-        self.stage = PixelStage(self._settings)
-        self._cursor_on = False                          # blinking block cursor after the tagline
-        self._blink = QTimer(self)
-        self._blink.setInterval(550)
-        self._blink.timeout.connect(self._toggle_cursor)
-        self.hint = QLabel()
-        self.hint.setObjectName("hint")
-        self.hint.setWordWrap(True)
-        root.addWidget(hero)
-        root.addWidget(tagline)
-        root.addWidget(self.stage)
-        root.addWidget(self.hint)
+        self.search = _Search()
+        self.search.setObjectName("search")
+        self.search.setPlaceholderText("Search Markdown files…")
+        self.search.setClearButtonEnabled(False)
+        self.search.textChanged.connect(lambda _t: self.refresh(reset=True))
+        self.search.move.connect(self._move)
+        self.search.activate.connect(self._open_current)
+        self.search.escape.connect(self.hide)
+        root.addWidget(self.search)
 
-        self.open_btn = QPushButton("\u25b6  Open file\u2026")
-        self.open_btn.setObjectName("primary")
-        self.open_btn.setMinimumHeight(48)
+        self.status = QLabel()                               # e.g. a global shortcut that could not be registered
+        self.status.setObjectName("launchererror")
+        self.status.setWordWrap(True)
+        self.status.hide()
+        root.addWidget(self.status)
+
+        self.results = QListWidget()
+        self.results.setObjectName("results")
+        self.results.setMouseTracking(True)
+        self.results.setItemDelegate(_RowDelegate(self._theme, self.results))
+        self.results.itemEntered.connect(self.results.setCurrentItem)          # hover selects, like V1
+        self.results.itemActivated.connect(lambda it: self._open_item(it))
+        self.results.itemClicked.connect(lambda it: self._open_item(it))
+        self.results.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.results.customContextMenuRequested.connect(self._menu)
+        self.results.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.results.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        root.addWidget(self.results, 1)
+
+        # footer: V1's three buttons; the cat sits on + ADD FILE
+        self.open_btn = self._button("+ ADD FILE", primary=True)
         self.open_btn.clicked.connect(self.open_dialog_requested)
-        self.ai_btn = QPushButton("\u270e  New with AI")
+        self.ai_btn = self._button("\u270e  NEW WITH AI")
         self.ai_btn.clicked.connect(self.ai_create_requested)
-        self.voice_btn = QPushButton("\u25cf  Voice")
+        self.voice_btn = self._button("\u25cf  VOICE")
         self.voice_btn.clicked.connect(self.voice_requested)
-        settings_btn = QPushButton("Settings")
-        settings_btn.clicked.connect(self.settings_requested)
-        for b in (self.open_btn, self.ai_btn, self.voice_btn, settings_btn):
-            b.setMinimumHeight(max(40, b.minimumHeight()))
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.ai_btn.setMinimumWidth(150)                 # asymmetric 3D borders can make Qt's size hint too small
-        settings_btn.setMinimumWidth(90)
-        self.voice_btn.setMinimumWidth(80)
-        anim = self._settings.get("animations") is not False
-        self.cat = TypingCat(self._settings.get("theme") or "retro", anim, scale=2, crop_top=8)
-        cat_row = QHBoxLayout()                          # the cat sits right on top of the Open button
-        cat_row.setContentsMargins(0, 0, 0, 0)
-        cat_row.addStretch(1)
-        cat_row.addWidget(self.cat)
-        cat_row.addSpacing(18)
-        root.addSpacing(-4)
-        root.addLayout(cat_row)
-        root.addSpacing(-12)
-        root.addWidget(self.open_btn)                    # the main action gets its own full-width row
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        row.addWidget(self.ai_btn, 1)
-        row.addWidget(self.voice_btn, 1)
-        row.addWidget(settings_btn, 1)
-        root.addLayout(row)
+        btns = QHBoxLayout()
+        btns.setSpacing(8)
+        for b in (self.open_btn, self.ai_btn, self.voice_btn):
+            btns.addWidget(b)
+        btns.addStretch(1)
+        root.addLayout(btns)
 
-        self.drop_hint = QLabel("or drag & drop .md files anywhere on this window")
-        self.drop_hint.setObjectName("hint")
-        root.addWidget(self.drop_hint)
-
-        root.addWidget(self._section("OPEN WINDOWS"))
-        self.windows_list = QListWidget()
-        self.windows_list.itemActivated.connect(lambda it: self.focus_requested.emit(it.data(_KEY)))
-        self.windows_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.windows_list.customContextMenuRequested.connect(self._windows_menu)
-        root.addWidget(self.windows_list, 2)
-
-        root.addWidget(self._section("RECENT FILES"))
-        self.recent_list = QListWidget()
-        self.recent_list.itemActivated.connect(lambda it: self.open_path_requested.emit(it.data(_KEY)))
-        self.recent_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.recent_list.customContextMenuRequested.connect(self._recent_menu)
-        root.addWidget(self.recent_list, 3)
-
-        foot_w = QWidget()
-        foot_w.setObjectName("footbar")
-        foot_w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        foot = QHBoxLayout(foot_w)
-        foot.setContentsMargins(0, 8, 0, 0)
-        self.footer = QLabel("Closing this window keeps the app running in the tray.")
-        self.footer.setObjectName("hint")
-        self.footer.setWordWrap(True)
-        quit_btn = QPushButton("Exit app")
+        self.hint = QLabel()
+        self.hint.setObjectName("launcherhint")
+        self.hint.setWordWrap(True)
+        quit_btn = QPushButton("EXIT APP")
+        quit_btn.setProperty("v1", True)
+        quit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        quit_btn.setToolTip("Quit the app completely (closing this window keeps it running in the tray)")
         quit_btn.clicked.connect(self.exit_requested)
-        foot.addWidget(self.footer, 1)
+        self._decorate(quit_btn)
+        foot = QHBoxLayout()
+        foot.addWidget(self.hint, 1)
         foot.addWidget(quit_btn)
-        root.addWidget(foot_w)
+        root.addLayout(foot)
+
+        anim = self._settings.get("animations") is not False
+        self.cat = TypingCat(self._settings.get("theme") or "retro", anim, scale=2, crop_top=8, parent=self.body)
+        self.cat.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.cat.raise_()
+        QShortcut(QKeySequence("Ctrl+,"), self, activated=self.settings_requested.emit)
 
         wm_signal = getattr(window_manager, "windows_changed", None)
         if wm_signal is not None:
             wm_signal.connect(self.refresh)
         self.refresh()
 
-    @staticmethod
-    def _section(text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setObjectName("section")
-        return lbl
+    # widgets ---------------------------------------------------------------------------------
+    def _theme(self) -> dict:
+        return load_theme(self._settings.get("theme") or "retro")
 
-    # content --------------------------------------------------------------------
+    def _button(self, text: str, primary: bool = False) -> QPushButton:
+        b = QPushButton(text)
+        b.setProperty("v1", True)
+        b.setProperty("primary", primary)
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
+        b.setMinimumHeight(32)
+        b.setMinimumWidth(len(text) * 8 + 24)               # asymmetric borders can make Qt's size hint too small
+        return self._decorate(b)
+
+    def _decorate(self, b: QPushButton) -> QPushButton:
+        fx = QGraphicsDropShadowEffect(b)                    # V1's `box-shadow: 2px 2px 0 var(--shadow)`
+        fx.setBlurRadius(0)
+        fx.setOffset(2, 2)
+        fx.setColor(QColor(self._theme()["shadow"]))
+        b.setGraphicsEffect(fx)
+        return b
+
+    def apply_theme(self) -> None:
+        """Called when the theme changes: shadows and the cat follow it, the list repaints."""
+        color = QColor(self._theme()["shadow"])
+        for b in self.findChildren(QPushButton):
+            fx = b.graphicsEffect()
+            if isinstance(fx, QGraphicsDropShadowEffect) and b.property("v1"):
+                fx.setColor(color)
+        self.cat.set_theme(self._settings.get("theme") or "retro")
+        self.results.viewport().update()
+
+    def _place_cat(self) -> None:
+        """The cat perches on the top-right of the + ADD FILE button (an overlay, so it takes no layout space)."""
+        pos = self.open_btn.mapTo(self.body, QPoint(0, 0))
+        self.cat.move(pos.x() + max(self.open_btn.width() - self.cat.width() - 8, 4), pos.y() - self.cat.height() + 5)
+        self.cat.raise_()
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        self._place_cat()
+
+    # content -----------------------------------------------------------------------------------
     def set_shortcut_status(self, text: str) -> None:
         self.shortcut_status = text
         self._update_hint()
 
     def _update_hint(self) -> None:
         seq = self._settings.get("shortcut_primary")
-        if self.shortcut_status:
-            self.hint.setText(f"\u26a0 {self.shortcut_status}")
-            self.hint.setProperty("warn", True)
-        else:
-            self.hint.setText(f"Press {seq} anywhere to open or focus your main file." if seq
-                              else "No global shortcut set (see Settings).")
-            self.hint.setProperty("warn", False)
-        self.hint.style().unpolish(self.hint)
-        self.hint.style().polish(self.hint)
+        self.status.setText(f"\u26a0 {self.shortcut_status}" if self.shortcut_status else "")
+        self.status.setVisible(bool(self.shortcut_status))
+        self.hint.setText("\u2191\u2193 select \u00b7 Enter open \u00b7 Esc close \u00b7 Ctrl+, settings"
+                          + (f" \u00b7 {seq} toggles" if seq else ""))
 
-    def refresh(self) -> None:
-        self.cat.set_theme(self._settings.get("theme") or "retro")
-        self.stage.update()
+    def refresh(self, reset: bool = False) -> None:
+        """Rebuild the list. The highlighted file is kept across refreshes unless `reset` (new search text, window shown)."""
         self._update_hint()
-        self.windows_list.clear()
-        for w in self._wm.windows():
-            state = "hidden" if not w.isVisible() else ("minimized" if w.isMinimized() else "open")
-            it = QListWidgetItem(f"{os.path.basename(w.path)}   [{state}]")
-            it.setToolTip(w.path)
-            it.setData(_KEY, w.key)
-            self.windows_list.addItem(it)
-        if self.windows_list.count() == 0:
-            self._placeholder(self.windows_list, "No windows open yet.")
+        self.cat.set_theme(self._settings.get("theme") or "retro")
+        q = self.search.text().strip().lower()
         open_keys = {w.key for w in self._wm.windows()}
-        self.recent_list.clear()
-        for row in self._db.recent_files(15):
-            exists = os.path.exists(row["path"])
-            name = os.path.basename(row["path"]) + ("" if exists else "   [missing]")
-            it = QListWidgetItem(("\u25cf " if row["key"] in open_keys else "   ") + name)
+        keep = None if reset or self.results.currentItem() is None else self.results.currentItem().data(_KEY)
+        self.results.clear()
+        rows = self._db.recent_files(200)
+        shown = 0
+        for row in rows:
+            name = os.path.basename(row["path"])
+            if q and q not in name.lower() and q not in row["path"].lower():
+                continue
+            it = QListWidgetItem(name)
             it.setToolTip(row["path"])
-            it.setData(_KEY, row["path"])
-            it.setData(_KEY + 1, row["key"])
-            if not exists:
-                it.setForeground(Qt.GlobalColor.gray)
-            self.recent_list.addItem(it)
-        if self.recent_list.count() == 0:
-            self._placeholder(self.recent_list, "Nothing yet \u2014 open a file to get started.")
-
-    @staticmethod
-    def _placeholder(lst: QListWidget, text: str) -> None:
-        it = QListWidgetItem(text)
-        it.setFlags(Qt.ItemFlag.NoItemFlags)
-        lst.addItem(it)
-
-    def _toggle_cursor(self) -> None:
-        self._cursor_on = not self._cursor_on
-        self.tagline.setText(self._TAG + (" \u2588" if self._cursor_on else "  "))
-
-    def hideEvent(self, e) -> None:  # noqa: N802
-        self._blink.stop()
-        self.cat.stop()
-        super().hideEvent(e)
+            it.setData(_PATH, row["path"])
+            it.setData(_KEY, row["key"])
+            it.setData(_OPEN, row["key"] in open_keys)
+            it.setData(_MISSING, not os.path.exists(row["path"]))
+            self.results.addItem(it)
+            shown += 1
+        if shown == 0:
+            it = QListWidgetItem("No files yet. Open a Markdown file, or drag one onto this window." if not rows else "No matches.")
+            it.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.results.addItem(it)
+        else:
+            row = next((i for i in range(self.results.count()) if self.results.item(i).data(_KEY) == keep), 0)
+            self.results.setCurrentRow(row)
 
     def showEvent(self, e) -> None:  # noqa: N802
-        if self._settings.get("animations") is not False:
-            self._blink.start()
-            self.cat.start()
-        self.refresh()
+        self.refresh(reset=True)
         super().showEvent(e)
+        self.search.setFocus()
+        self._place_cat()
+        self.cat.start()
+
+    def hideEvent(self, e) -> None:  # noqa: N802
+        self.cat.stop()
+        super().hideEvent(e)
 
     def present(self) -> None:
         self.show()
@@ -256,25 +309,34 @@ class HomeWindow(QWidget):
             self.showNormal()
         self.raise_()
         self.activateWindow()
+        self.search.setFocus()
 
-    # menus ----------------------------------------------------------------------
-    def _windows_menu(self, pos) -> None:
-        it = self.windows_list.itemAt(pos)
-        if it is None or it.data(_KEY) is None:
+    # keyboard / activation ---------------------------------------------------------------------
+    def _move(self, delta: int) -> None:
+        n = self.results.count()
+        if n and self.results.item(0).data(_KEY) is not None:
+            self.results.setCurrentRow(max(0, min(n - 1, self.results.currentRow() + delta)))
+
+    def _open_current(self) -> None:
+        self._open_item(self.results.currentItem())
+
+    def _open_item(self, it) -> None:
+        if it is not None and it.data(_PATH):
+            self.open_path_requested.emit(it.data(_PATH))      # focuses the window instead if it is already open
+
+    # context menu ----------------------------------------------------------------------------------
+    def _menu(self, pos) -> None:
+        it = self.results.itemAt(pos)
+        if it is None or not it.data(_PATH):
             return
         m = QMenu(self)
-        m.addAction("Show / focus", lambda: self.focus_requested.emit(it.data(_KEY)))
-        m.addAction("Close window", lambda: self.close_window_requested.emit(it.data(_KEY)))
-        m.exec(self.windows_list.viewport().mapToGlobal(pos))
-
-    def _recent_menu(self, pos) -> None:
-        it = self.recent_list.itemAt(pos)
-        if it is None or it.data(_KEY) is None:
-            return
-        m = QMenu(self)
-        m.addAction("Open", lambda: self.open_path_requested.emit(it.data(_KEY)))
-        m.addAction("Remove from list", lambda: (self.forget_requested.emit(it.data(_KEY + 1)), self.refresh()))
-        m.exec(self.recent_list.viewport().mapToGlobal(pos))
+        if it.data(_OPEN):
+            m.addAction("Show / focus", lambda: self.focus_requested.emit(it.data(_KEY)))
+            m.addAction("Close window", lambda: self.close_window_requested.emit(it.data(_KEY)))
+        else:
+            m.addAction("Open", lambda: self.open_path_requested.emit(it.data(_PATH)))
+        m.addAction("Remove from list", lambda: (self.forget_requested.emit(it.data(_KEY)), self.refresh()))
+        m.exec(self.results.viewport().mapToGlobal(pos))
 
     # edge resize (same behaviour as the note windows) -------------------------------
     def _edges_at(self, pos: QPoint) -> Qt.Edge:

@@ -51,7 +51,7 @@ class ButtonFx(QProxyStyle):
             if isinstance(w, (QPushButton, QToolButton)):
                 if on:
                     self._attach(w)
-                elif isinstance(w.graphicsEffect(), QGraphicsDropShadowEffect):
+                elif isinstance(w.graphicsEffect(), QGraphicsDropShadowEffect) and not w.property("v1"):
                     w.setGraphicsEffect(None)
 
     def polish(self, widget) -> None:

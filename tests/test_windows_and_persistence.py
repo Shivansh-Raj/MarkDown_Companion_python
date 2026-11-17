@@ -1,5 +1,6 @@
 import os
 
+from PySide6.QtCore import Qt
 from conftest import FakeBackend, wait_for
 from app.core.shortcut_manager import MOD_CONTROL, MOD_SHIFT, ShortcutManager, parse_shortcut
 from app.services.persistence import Database
@@ -214,9 +215,10 @@ def test_home_lists_recent_and_open_windows(make_app, md):
     p = md("home.md")
     w = app.open_path(str(p))
     app.home.refresh()
-    assert "home.md" in app.home.recent_list.item(0).text()
-    assert app.home.windows_list.item(0).data(0x100) == w.key
-    app.home.recent_list.itemActivated.emit(app.home.recent_list.item(0))      # opens/focuses, no duplicate
+    item = app.home.results.item(0)
+    assert item.text() == "home.md" and item.data(Qt.ItemDataRole.UserRole + 1) == w.key       # one list: files, newest first
+    assert item.data(Qt.ItemDataRole.UserRole + 2) is True                                      # shown with the OPEN badge
+    app.home.results.itemActivated.emit(item)                                                  # opens/focuses, no duplicate
     assert len(app.windows.windows()) == 1
 
 
@@ -227,10 +229,11 @@ def test_home_marks_missing_and_forgets(make_app, md):
     app.windows.close_window(app.windows.windows()[0].key)
     p.unlink()
     app.home.refresh()
-    assert "[missing]" in app.home.recent_list.item(0).text()
-    app.home.forget_requested.emit(app.home.recent_list.item(0).data(0x101))
+    item = app.home.results.item(0)
+    assert item.data(Qt.ItemDataRole.UserRole + 3) is True and item.data(Qt.ItemDataRole.UserRole + 2) is False   # MISSING badge, not open
+    app.home.forget_requested.emit(item.data(Qt.ItemDataRole.UserRole + 1))
     app.home.refresh()
-    assert "Nothing yet" in app.home.recent_list.item(0).text()
+    assert "No files yet" in app.home.results.item(0).text()
 
 
 def test_home_uses_same_chrome_as_note_windows(make_app, md):

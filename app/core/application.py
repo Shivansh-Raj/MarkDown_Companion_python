@@ -179,6 +179,7 @@ class CompanionApp(QObject):
         elif key in ("theme", "button_shadow"):
             theme, v1 = self.settings.get("theme"), bool(self.settings.get("button_shadow"))
             self.qapp.setStyleSheet(chrome_qss(theme, v1))
+            self.home.apply_theme()
             if getattr(self, "button_fx", None):
                 self.button_fx.set_theme(theme)
                 self.button_fx.set_enabled(v1)

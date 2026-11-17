@@ -88,12 +88,19 @@ QWidget#editbar QPushButton { padding: 2px 8px; }
 
 /* ---- bars, panels, lists ---- */
 QWidget#home { background: %(bg)s; }
-QWidget#home QPushButton { font-size: 13px; letter-spacing: 1px; }
-QWidget#home QPushButton#primary { font-size: 15px; letter-spacing: 2px; }
-QWidget#home QPushButton#primary:pressed { background: %(accent)s; }
-QLabel#tagline { color: %(accent2)s; font-family: Consolas, Menlo, monospace; font-size: 11px; letter-spacing: 3px; }
-QLabel#hero { padding-bottom: 0; }
-QWidget#footbar { border-top: 3px double %(border)s; }
+/* ---- V1-style launcher: flat bordered widgets with a hard shadow, nothing else ---- */
+QWidget#launcher { background: %(bg)s; }
+QLineEdit#search { background: %(code_bg)s; color: %(fg)s; border: 2px solid %(border_hi)s; padding: 8px 10px; font-size: 15px;
+  selection-background-color: %(accent)s; selection-color: %(accent_ink)s; }
+QListWidget#results { background: %(code_bg)s; border: 2px solid %(border_hi)s; padding: 0; outline: 0; }
+QPushButton[v1="true"] { background: %(bg_alt)s; color: %(fg)s; border: 2px solid %(border_hi)s; padding: 4px 10px;
+  font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 12px; }
+QPushButton[v1="true"]:hover { background: %(code_bg)s; color: %(fg)s; }
+QPushButton[v1="true"]:pressed { background: %(bg)s; }
+QPushButton[v1="true"][primary="true"] { background: %(accent)s; color: %(accent_ink)s; }
+QPushButton[v1="true"][primary="true"]:hover { background: %(accent)s; color: %(accent_ink)s; }
+QLabel#launcherhint { color: %(muted)s; font-size: 11px; }
+QLabel#launchererror { color: %(fg)s; background: %(danger_bg)s; border: 2px solid %(border_hi)s; padding: 6px 8px; font-size: 12px; }
 QLabel#hero { color: %(accent)s; font-family: Consolas, Menlo, monospace; font-weight: bold; font-size: 26px; letter-spacing: 3px; }
 QLabel#hint { color: %(muted)s; font-size: 11px; } QLabel#hint[warn="true"] { color: #ff9b6b; }
 QLabel#section { color: %(accent2)s; font-weight: bold; font-size: 11px; letter-spacing: 2px; margin-top: 6px; border-bottom: 3px double %(border)s; padding-bottom: 3px; }
@@ -159,8 +166,6 @@ QPushButton { border-top: 2px solid %(border_hi)s; border-left: 2px solid %(bord
 QPushButton:pressed { border-top: 4px solid %(shadow)s; border-left: 4px solid %(shadow)s;
   border-right: 2px solid %(border_hi)s; border-bottom: 2px solid %(border_hi)s; }
 QPushButton:disabled { border-color: %(border)s; }
-QWidget#home QPushButton#primary { border-right-width: 5px; border-bottom-width: 5px; }
-QWidget#home QPushButton#primary:pressed { border-top-width: 5px; border-left-width: 5px; border-right-width: 2px; border-bottom-width: 2px; }
 QComboBox { border-top: 2px solid %(border_hi)s; border-left: 2px solid %(border_hi)s; border-right: 3px solid %(shadow)s; border-bottom: 3px solid %(shadow)s; }
 """
 
@@ -172,5 +177,6 @@ def chrome_qss(theme_id: str, v1_borders: bool = False) -> str:
         return QColor(*(round(x + (y - x) * k) for x, y in
                         zip((ca.red(), ca.green(), ca.blue()), (cb.red(), cb.green(), cb.blue())))).name()
     extra = {"acc_hi": mix(t["accent"], "#ffffff", 0.28), "acc_lo": mix(t["accent"], "#000000", 0.22),
-             "alt_hi": mix(t["bg_alt"], "#ffffff", 0.10), "bg_hi": mix(t["bg"], "#ffffff", 0.06)}
+             "alt_hi": mix(t["bg_alt"], "#ffffff", 0.10), "bg_hi": mix(t["bg"], "#ffffff", 0.06),
+             "danger_bg": "#ffd9d4" if QColor(t["bg"]).lightness() > 128 else "#4a2530"}      # error banner, as in V1
     return (_QSS if v1_borders else _QSS + _BEVEL) % {"accent_ink": t["bg"], **extra, **t}        # text on accent colour defaults to the background

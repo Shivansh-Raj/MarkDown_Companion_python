@@ -164,7 +164,7 @@ def test_key_storage_roundtrip_and_removal(app):
 
 def test_home_and_settings_expose_ai(app):
     from app.ui.settings_window import SettingsWindow
-    assert app.home.ai_btn.text().endswith("New with AI")
+    assert app.home.ai_btn.text().upper().endswith("NEW WITH AI")
     s = SettingsWindow(app.settings, "", app.windows.ai)
     s.animations.setChecked(False)
     s._custom_dir = "/tmp/x"
