@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..markdown.theme import chrome_qss
 from ..ui.button_fx import ButtonFx
+from ..utils.macos import set_dock_icon_visible
 from ..services.persistence import Database
 from ..ui.ai_create_window import AiCreateWindow
 from ..ui.file_picker import pick_markdown_file
@@ -83,6 +84,7 @@ class CompanionApp(QObject):
         return False
 
     def start(self, show_home: bool = True) -> None:
+        set_dock_icon_visible(not self.settings.get("hide_dock_icon"))     # no-op outside macOS
         v1 = bool(self.settings.get("button_shadow"))
         self.qapp.setStyleSheet(chrome_qss(self.settings.get("theme"), v1))
         self.button_fx = ButtonFx(self.settings.get("theme"), self.qapp.style().name(), v1)  # V1-style button outline
@@ -154,6 +156,8 @@ class CompanionApp(QObject):
     def _on_setting_changed(self, key: str) -> None:
         if key in ("shortcut_primary", "shortcut_picker", "shortcut_home"):
             self._register_shortcuts()
+        elif key == "hide_dock_icon":
+            set_dock_icon_visible(not self.settings.get("hide_dock_icon"))
         elif key == "font_scale":
             self.windows.apply_font_scale(self.settings.get("font_scale"))
         elif key in ("theme", "button_shadow"):

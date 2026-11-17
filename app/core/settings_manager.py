@@ -19,6 +19,7 @@ DEFAULTS: dict[str, Any] = {
     "last_dir": "",
     "button_shadow": False,               # V1-style outline + offset shadow on buttons (off = classic bevel)
     "font_scale": 100,                    # text size of the Markdown view, percent
+    "hide_dock_icon": True,               # macOS: keep the app out of the Dock, tray/menu bar only
     "show_home": True,                    # show the home screen on startup
     "ai_save_dir": "",                    # where AI-created files go ("" = ~/Documents/MarkdownCompanion)
     "ai_history": [],                     # recent AI-edit instructions, newest first
@@ -41,7 +42,7 @@ _VALIDATORS = {
     "ai_save_dir": str, "groq_api_key": str, "animations": bool, "ai_history": _valid_history,
     "opacity": _valid_opacity, "font_scale": lambda v: min(200, max(60, int(v))),
     "compact_default": bool,
-    "show_home": bool, "button_shadow": bool,
+    "show_home": bool, "button_shadow": bool, "hide_dock_icon": bool,
     "restore_windows": bool,
     "theme": str, "last_dir": str, "associated_file": str,
     "shortcut_primary": str, "shortcut_picker": str, "shortcut_home": str,

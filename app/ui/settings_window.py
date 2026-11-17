@@ -1,6 +1,8 @@
 """Settings dialog."""
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QKeySequenceEdit,
@@ -77,7 +79,11 @@ class SettingsWindow(QDialog):
         self.show_home.setChecked(settings.get("show_home"))
         self.button_shadow = QCheckBox("V1-style button borders (outline + shadow)")
         self.button_shadow.setChecked(settings.get("button_shadow"))
+        self.hide_dock = QCheckBox("macOS: hide the Dock icon (menu bar only)")
+        self.hide_dock.setChecked(settings.get("hide_dock_icon"))
         form.addRow("", self.show_home)
+        if sys.platform == "darwin":
+            form.addRow("", self.hide_dock)
         form.addRow("", self.button_shadow)
         form.addRow("", self.compact)
         form.addRow("", self.restore)
@@ -196,6 +202,7 @@ class SettingsWindow(QDialog):
         s.set("compact_default", self.compact.isChecked())
         s.set("restore_windows", self.restore.isChecked())
         s.set("show_home", self.show_home.isChecked())
+        s.set("hide_dock_icon", self.hide_dock.isChecked())
         s.set("button_shadow", self.button_shadow.isChecked())
         s.set("shortcut_primary", _seq_text(self.primary))
         s.set("shortcut_home", _seq_text(self.home_seq))
