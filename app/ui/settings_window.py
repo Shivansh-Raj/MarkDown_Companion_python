@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLayout, QKeySequenceEdit,
-                               QLabel, QLineEdit, QPushButton, QSlider, QVBoxLayout, QWidget)
+                               QLabel, QLineEdit, QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget)
 
 from ..ai.worker import KeyTestWorker
 
@@ -141,8 +141,19 @@ class SettingsWindow(QDialog):
         buttons.addStretch(1)
         buttons.addWidget(apply_btn)
         buttons.addWidget(close_btn)
+        # The settings can be taller than the screen (the Notion block alone is long), so they scroll while Apply / Close stay put.
+        self._content = QWidget()
+        self._content.setLayout(form)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self._scroll.viewport().setAutoFillBackground(False)
+        self._scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self._content.setObjectName("settingscontent")
+        self._content.setStyleSheet("QWidget#settingscontent { background: transparent; }")
+        self._scroll.setWidget(self._content)
         root = QVBoxLayout(self)
-        root.addLayout(form)
+        root.addWidget(self._scroll, 1)
         root.addLayout(buttons)
         for i in range(form.rowCount()):                 # row labels in the pixel font, like the Markdown view's headings
             item = form.itemAt(i, QFormLayout.ItemRole.LabelRole)
@@ -153,11 +164,21 @@ class SettingsWindow(QDialog):
         self._strut.setFixedHeight(0)
         self._strut.setMinimumWidth(scale.px(500))
         root.addWidget(self._strut)
-        root.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        self.resize(self.sizeHint())
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        """The content's size, but never taller than the screen: beyond that the settings scroll."""
+        content = self._content.sizeHint()
+        bar = self._scroll.verticalScrollBar().sizeHint().width()
+        screen = QGuiApplication.primaryScreen()
+        limit = int(screen.availableGeometry().height() * 0.9) if screen else 800
+        buttons = 60
+        return QSize(max(content.width() + bar + 24, scale.px(500)), min(content.height() + buttons + 24, limit))
 
     def rescale(self) -> None:
         """Text size changed: keep the minimum width in proportion and grow the window to fit its larger content."""
         self._strut.setMinimumWidth(scale.px(500))
+        self._content.updateGeometry()
         self.layout().invalidate()
         QTimer.singleShot(0, self._fit)
 

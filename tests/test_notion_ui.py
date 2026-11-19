@@ -200,3 +200,18 @@ def test_the_note_window_has_a_notion_button_that_opens_and_closes_the_panel(mak
     win.open_notion()
     win.open_ask()
     assert not win._notion_open and win._ask_open, "only one side panel is open at a time"
+
+
+def test_a_tall_settings_window_stays_on_screen_and_scrolls(make_app):
+    from PySide6.QtGui import QGuiApplication
+    app = make_app()
+    app.windows.notion.connected = lambda: True            # the Notion block makes the form long
+    app.show_settings()
+    s = app._settings_win
+    s.show()
+    avail = QGuiApplication.primaryScreen().availableGeometry().height()
+    assert s.height() <= avail, "the window must never be taller than the screen"
+    assert s._content.sizeHint().height() > 0 and s._scroll.widget() is s._content
+    # Apply and Close stay outside the scrolling part, so they are always reachable
+    buttons = [b for b in s.findChildren(__import__("PySide6.QtWidgets", fromlist=["QPushButton"]).QPushButton) if b.text() in ("Apply", "Close")]
+    assert len(buttons) == 2 and all(not s._content.isAncestorOf(b) for b in buttons)

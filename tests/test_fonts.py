@@ -63,7 +63,8 @@ def test_settings_row_labels_are_in_the_pixel_font(make_app):
     app = make_app()
     app.show_settings()
     s = app._settings_win
-    form = next(s.layout().itemAt(i).layout() for i in range(s.layout().count()) if isinstance(s.layout().itemAt(i).layout(), QFormLayout))
+    form = s._content.layout()                           # the form sits inside a scroll area so a tall settings window never leaves the screen
+    assert isinstance(form, QFormLayout)
     labels = [form.itemAt(i, QFormLayout.ItemRole.LabelRole).widget() for i in range(form.rowCount())
               if form.itemAt(i, QFormLayout.ItemRole.LabelRole) and form.itemAt(i, QFormLayout.ItemRole.LabelRole).widget()]
     named = [lbl for lbl in labels if isinstance(lbl, QLabel) and lbl.text()]
