@@ -239,6 +239,29 @@ class Client:
             warnings.append(w if isinstance(w, str) else (w.get("message") if isinstance(w, dict) and w.get("message") else json.dumps(w)))
         return Updated(v.get("markdown") or "", bool(v.get("truncated")), warnings)
 
+    def query_data_source(self, ds: str, flt: dict | None, cursor: str | None):
+        """One page of rows. Returns (rows, next cursor or None, whether Notion says the result is incomplete)."""
+        pid = parse_page_id(ds)
+        if not pid:
+            raise NotionError("That is not a Notion database link or id.")
+        body: dict = {"page_size": 100}
+        if flt:
+            body["filter"] = flt
+        if cursor:
+            body["start_cursor"] = cursor
+        v = self.call("POST", f"/v1/data_sources/{pid}/query", body)
+        nxt = v.get("next_cursor") if v.get("has_more") else None
+        return ([r for r in v.get("results", []) if isinstance(r, dict)], nxt,
+                (v.get("request_status") or {}).get("type") == "incomplete")
+
+    def get_page(self, page: str) -> dict:
+        """The whole page object (properties, parent, trash flag)."""
+        return self.call("GET", f"/v1/pages/{self._id(page)}")
+
+    def update_properties(self, page: str, properties: dict) -> None:
+        """Changes only the properties given; every other property and the page's content are left alone."""
+        self.call("PATCH", f"/v1/pages/{self._id(page)}", {"properties": properties})
+
     def _children(self, parent: str):
         """Direct children of a page (up to 300)."""
         pid = self._id(parent)

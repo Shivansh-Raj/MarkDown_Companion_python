@@ -105,6 +105,7 @@ class HomeWindow(QWidget):
     ai_create_requested = Signal()
     voice_requested = Signal()
     notion_requested = Signal()
+    notion_tasks_requested = Signal()
     exit_requested = Signal()
 
     def __init__(self, db, window_manager, settings):
@@ -183,9 +184,12 @@ class HomeWindow(QWidget):
         self.notion_btn = self._button("\u25a4  NOTION")
         self.notion_btn.setToolTip("Open a Notion page as a note")
         self.notion_btn.clicked.connect(self.notion_requested)
+        self.notion_tasks_btn = self._button("\u2611  NOTION TASKS")
+        self.notion_tasks_btn.setToolTip("Open and overdue tasks from your Notion Tasks database")
+        self.notion_tasks_btn.clicked.connect(self.notion_tasks_requested)
         btns = QHBoxLayout()
         btns.setSpacing(8)
-        for b in (self.open_btn, self.ai_btn, self.voice_btn, self.notion_btn):
+        for b in (self.open_btn, self.ai_btn, self.voice_btn, self.notion_btn, self.notion_tasks_btn):
             btns.addWidget(b)
         btns.addStretch(1)
         root.addLayout(btns)

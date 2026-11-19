@@ -30,6 +30,7 @@ class WindowManager(QObject):
         self._files, self._db, self._settings = files, db, settings
         self.ai = AiServices(settings)
         self.notion = NotionService(settings, sync_service=files.sync)
+        self.ai.notion = self.notion        # the voice export reaches the Notion connection through the shared services
         self._windows: dict[str, MarkdownWindow] = {}
         self._quitting = False
         self._save_timer = QTimer(self, singleShot=True, interval=SAVE_DEBOUNCE_MS)

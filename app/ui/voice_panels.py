@@ -18,6 +18,7 @@ from ..voice import analytics as ana
 from ..voice import coach as co
 from ..voice import followups as fu
 from ..voice import export, session, templates as tpl
+from ..voice.notion_export import (body_from_sections, notion_target_for, notion_values, practice_properties, task_rows_for)
 from ..services.synchronization import read_snapshot
 from .flow_layout import FlowLayout
 from . import scale
@@ -37,9 +38,20 @@ class ExportDialog(QDialog):
     """Preview and save voice outputs as Markdown: new file(s), or appended to an existing file without touching it."""
     file_created = Signal(str)
 
-    def __init__(self, meta, sections: list[tpl.Section], doc_title: str, ai, db, sync, parent=None):
+    def __init__(self, meta, sections: list[tpl.Section], doc_title: str, ai, db, sync, parent=None,
+                 action_items=None, properties: dict | None = None):
         super().__init__(parent)
         self.meta, self.sections, self.doc_title, self.ai, self.db, self.sync = meta, sections, doc_title, ai, db, sync
+        self.action_items, self.properties = list(action_items or []), dict(properties or {})
+        self.notion = getattr(ai, "notion", None)          # the Notion connection, when the app has one
+        self._notion_target = notion_target_for(meta)
+        self._notion_db = self.notion.destination(self._notion_target.key) if self.notion and self._notion_target.key != "notes" else None
+        self._tasks_db = self.notion.destination("tasks") if self.notion else None
+        self._notion_home = self.notion.home() if self.notion else None
+        self._sent_key = f"notion_tasks_sent:{meta.id}"
+        self._sent: set[str] = set(db.get_setting(self._sent_key, []) or [])
+        self._task_checks: dict[str, QCheckBox] = {}
+        self._notion_worker = None
         self._folder: str | None = None                    # None = the default save folder
         use_body_font(self, 12)                            # same text look as the Markdown view (and follows the Text size setting)
         self.setWindowTitle("Export as Markdown")
@@ -58,19 +70,21 @@ class ExportDialog(QDialog):
 
         self.new_radio = QRadioButton("New file")
         self.append_radio = QRadioButton("Add to an existing file")
+        self.notion_radio = QRadioButton("Notion")
+        self.notion_radio.setVisible(bool(self.notion and self.notion.connected()))
         self.new_radio.setChecked(True)
         self.combined_radio = QRadioButton("One document")
         self.separate_radio = QRadioButton("One file per section")
         self.combined_radio.setChecked(True)
         self._dest_group, self._layout_group = QButtonGroup(self), QButtonGroup(self)   # two independent choices
-        for r in (self.new_radio, self.append_radio):
+        for r in (self.new_radio, self.append_radio, self.notion_radio):
             self._dest_group.addButton(r)
         for r in (self.combined_radio, self.separate_radio):
             self._layout_group.addButton(r)
-        for r in (self.new_radio, self.append_radio, self.combined_radio, self.separate_radio):
+        for r in (self.new_radio, self.append_radio, self.notion_radio, self.combined_radio, self.separate_radio):
             r.toggled.connect(self._update)
         dest_row = QHBoxLayout()
-        for r in (self.new_radio, self.append_radio):
+        for r in (self.new_radio, self.append_radio, self.notion_radio):
             dest_row.addWidget(r)
         dest_row.addStretch(1)
         layout_row = QHBoxLayout()
@@ -103,6 +117,38 @@ class ExportDialog(QDialog):
         ab.addWidget(self.target_box, 1)
         ab.addWidget(self.target_hint)
 
+        # Notion: a database row when one is set up for this kind of recording, else a page under the home page.
+        self.notion_title = QLineEdit(meta.title.strip() or doc_title)
+        self.notion_title.editingFinished.connect(self._refresh_columns)
+        self.notion_info = QLabel()
+        self.notion_info.setObjectName("hint")
+        self.notion_info.setWordWrap(True)
+        self.tasks_box = QWidget()
+        tb = QVBoxLayout(self.tasks_box)
+        tb.setContentsMargins(0, 0, 0, 0)
+        self.tasks_intro = QLabel()
+        self.tasks_intro.setObjectName("hint")
+        self.tasks_intro.setWordWrap(True)
+        tb.addWidget(self.tasks_intro)
+        meeting_is_row = self._notion_db is not None and self._notion_target.key == "meetings"
+        for r in task_rows_for(self.action_items, "(the meeting)" if meeting_is_row else None):
+            sent = r.key in self._sent
+            c = QCheckBox(f"{r.title}   ({'already sent' if sent else r.summary or 'no date or owner'})")
+            c.setChecked(not sent)
+            c.setEnabled(not sent)
+            self._task_checks[r.key] = c
+            tb.addWidget(c)
+        self.columns_label = QLabel("Columns that will be filled:")
+        self.columns_label.setObjectName("hint")
+        self.columns_view = QPlainTextEdit()
+        self.columns_view.setReadOnly(True)
+        self.columns_view.setMaximumHeight(110)
+        self.columns_view.setObjectName("editor")
+        self.notion_box = QWidget()
+        nbl = QVBoxLayout(self.notion_box)
+        nbl.setContentsMargins(0, 0, 0, 0)
+        for wdg in (self.notion_title, self.notion_info, self.tasks_box, self.columns_label, self.columns_view):
+            nbl.addWidget(wdg)
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
         self.preview.setObjectName("editor")
@@ -113,10 +159,15 @@ class ExportDialog(QDialog):
         self.save_btn = QPushButton("Save && open")
         self.save_btn.setObjectName("primary")
         self.save_btn.clicked.connect(self.save)
+        self._url = ""
+        self.open_url_btn = QPushButton("Open in Notion")
+        self.open_url_btn.hide()
+        self.open_url_btn.clicked.connect(self._open_url)
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.close)
         btns = QHBoxLayout()
         btns.addWidget(self.save_btn)
+        btns.addWidget(self.open_url_btn)
         btns.addWidget(close_btn)
         btns.addStretch(1)
 
@@ -130,6 +181,7 @@ class ExportDialog(QDialog):
         lay.addWidget(self.new_box)
         lay.addWidget(self.folder_label)
         lay.addWidget(self.append_box)
+        lay.addWidget(self.notion_box)
         lay.addWidget(self.preview, 1)
         lay.addWidget(self.message)
         lay.addLayout(btns)
@@ -146,6 +198,8 @@ class ExportDialog(QDialog):
         chosen = self.chosen()
         if not chosen:
             return ""
+        if self.notion_radio.isChecked():
+            return body_from_sections(chosen)
         if self.append_radio.isChecked():
             return tpl.append_from_sections(self.meta, chosen)
         if self.combined_radio.isChecked():
@@ -153,19 +207,61 @@ class ExportDialog(QDialog):
         return "\n\n".join(f"<!-- {suggest_file_name(self.meta.title, self.meta.created_at_ms, s.suffix)}.md -->\n"
                            f"{tpl.standalone_from_section(self.meta, s)}" for s in chosen)
 
+    def _notion_ready(self) -> bool:
+        return bool(self.notion and self.notion.connected() and (self._notion_db or self._notion_home))
+
     def _update(self, *_a) -> None:
-        appending = self.append_radio.isChecked()
-        self.new_box.setVisible(not appending)
-        self.folder_label.setVisible(not appending)
+        appending, to_notion = self.append_radio.isChecked(), self.notion_radio.isChecked()
+        files = not appending and not to_notion
+        self.new_box.setVisible(files)
+        self.folder_label.setVisible(files)
         self.append_box.setVisible(appending)
-        self.combined_radio.setVisible(not appending)
-        self.separate_radio.setVisible(not appending)
+        self.notion_box.setVisible(to_notion)
+        self.combined_radio.setVisible(files)
+        self.separate_radio.setVisible(files)
+        if to_notion:
+            self._update_notion()
         self.name_edit.setVisible(self.combined_radio.isChecked())
         self.folder_label.setText(f"Folder: {self.directory()}")
         self.folder_default_btn.setVisible(self._folder is not None)
         self.preview.setPlainText(self.preview_text())
-        self.save_btn.setText("Add to file" if appending else "Save && open")
-        self.save_btn.setEnabled(bool(self.chosen()) and (not appending or self.target_box.count() > 0))
+        self.save_btn.setText("Save to Notion" if to_notion else "Add to file" if appending else "Save && open")
+        self.save_btn.setEnabled(bool(self.chosen()) and (not appending or self.target_box.count() > 0)
+                                 and (not to_notion or (self._notion_ready() and bool(self.notion_title.text().strip()))))
+
+    def _update_notion(self) -> None:
+        t = self._notion_target
+        row = self._notion_db is not None and t.key != "notes"
+        home = self._notion_home
+        self.notion_info.setText(f"A new row in \"{self._notion_db['title']}\", with its mapped columns filled." if row
+                                 else f"A new page in {home['title']} > {t.label}." if home
+                                 else "Choose a Notion home page or database in Settings first.")
+        meeting_is_row = self._notion_db is not None and t.key == "meetings"
+        show_tasks = meeting_is_row and self._tasks_db is not None and bool(self._task_checks)
+        self.tasks_box.setVisible(show_tasks or (t.key == "meetings" and bool(self.action_items)))
+        self.tasks_intro.setText(f"Also create these as tasks in \"{self._tasks_db['title']}\". Each links to this meeting. Tick the ones you want."
+                                 if show_tasks else "To also create tasks, set up a Meetings database in Settings first, so each task can link to its meeting."
+                                 if not meeting_is_row else "To also create tasks, set up a Tasks database in Settings first.")
+        for c in self._task_checks.values():
+            c.setVisible(show_tasks)
+        self.columns_label.setVisible(row)
+        self.columns_view.setVisible(row)
+        if row:
+            self._refresh_columns()
+
+    def _refresh_columns(self) -> None:
+        """Shows exactly which columns would be filled. Reads the database's properties; creates nothing."""
+        if not self.notion_radio.isChecked() or self._notion_db is None or self._notion_target.key == "notes":
+            return
+        from ..notion.worker import run_async
+        key, title = self._notion_target.key, self.notion_title.text().strip() or "Untitled"
+        values = notion_values(self.meta, self.properties)
+
+        def show(p) -> None:
+            import json
+            self.columns_view.setPlainText(json.dumps(p.properties, indent=2) + ("\n\n" + "\n".join(p.warnings) if p.warnings else ""))
+        run_async(self, lambda: self.notion.preview_row(key, title, values), show, lambda _m: None)
+        self.save_btn.setEnabled(bool(self.chosen()) and self._notion_ready() and bool(self.notion_title.text().strip()))
 
     def _pick_folder(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "Choose a folder", str(self.directory()))
@@ -185,9 +281,65 @@ class ExportDialog(QDialog):
         self.message.style().polish(self.message)
         self.message.setVisible(bool(text))
 
+    def _open_url(self) -> None:
+        if self._url.startswith(("https://", "http://")):
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl(self._url))
+
+    def _save_notion(self, chosen) -> None:
+        from ..notion.worker import run_async
+        t, title, notion = self._notion_target, self.notion_title.text().strip(), self.notion
+        body, values = body_from_sections(chosen), notion_values(self.meta, self.properties)
+        as_row = self._notion_db is not None and t.key != "notes"
+        with_tasks = as_row and t.key == "meetings" and self._tasks_db is not None
+        picked = {k for k, c in self._task_checks.items() if c.isChecked() and k not in self._sent} if with_tasks else set()
+        items = self.action_items
+
+        def work():
+            made = notion.create_row(t.key, title, body, values) if as_row else notion.create_page("", title, body, section=t.section)
+            sent, failed = set(), []
+            if picked:
+                # Each task links to the meeting's row. They are created one at a time; one failure does not stop the rest.
+                for r in task_rows_for(items, made.id):
+                    if r.key not in picked:
+                        continue
+                    try:
+                        notion.create_row("tasks", r.title, r.body, r.values)
+                        sent.add(r.key)
+                    except Exception as e:
+                        failed.append(f"“{r.title}”: {e}")
+            return made, sent, failed
+
+        def done(result) -> None:
+            made, sent, failed = result
+            self._sent |= sent
+            self.db.set_setting(self._sent_key, sorted(self._sent))
+            for k in sent:
+                self._task_checks[k].setChecked(False)
+                self._task_checks[k].setEnabled(False)
+            where = f"({self._notion_db['title']})" if as_row else f"({self._notion_home['title']} > {t.label})"
+            left_out = f" Left empty: {' '.join(made.warnings)}" if made.warnings else ""
+            tasks = f" {len(sent)} task{'' if len(sent) == 1 else 's'} created in {self._tasks_db['title']}." if picked else ""
+            more = f" Not created: {' '.join(failed)}" if failed else ""
+            self.save_btn.setEnabled(True)
+            self.show_message(f"Saved to Notion {where}.{left_out}{tasks}{more}", "info")
+            self._url = made.url
+            self.open_url_btn.setVisible(self._url.startswith(("https://", "http://")))
+
+        def failed_(message: str) -> None:
+            self.save_btn.setEnabled(True)
+            self.show_message(message)
+        self.save_btn.setEnabled(False)
+        self.show_message("Sending...", "info")
+        self._notion_worker = run_async(self, work, done, failed_)
+
     def save(self) -> None:
         chosen = self.chosen()
         if not chosen:
+            return
+        if self.notion_radio.isChecked():
+            self._save_notion(chosen)
             return
         try:
             if self.append_radio.isChecked():
@@ -418,7 +570,7 @@ class AnalysisPanel(QWidget):
         if not self.results or self.svc.meta is None:
             return
         self._dialog = ExportDialog(self.svc.meta, tpl.meeting_sections(list(self.results.values())), "meeting notes",
-                                    self.ai, self.db, self.sync, self)
+                                    self.ai, self.db, self.sync, self, action_items=(self.results["actions"].items if "actions" in self.results else None))
         self._dialog.file_created.connect(self.file_created)
         self._dialog.show()
 
@@ -801,7 +953,8 @@ class PracticePanel(QWidget):
     def export(self) -> None:
         if self.analytics is None or self.svc.meta is None:
             return
-        self._dialog = ExportDialog(self.svc.meta, self.sections(), "presentation feedback", self.ai, self.db, self.sync, self)
+        self._dialog = ExportDialog(self.svc.meta, self.sections(), "presentation feedback", self.ai, self.db, self.sync, self,
+                                    properties=practice_properties(self.analytics))
         self._dialog.file_created.connect(self.file_created)
         self._dialog.show()
 

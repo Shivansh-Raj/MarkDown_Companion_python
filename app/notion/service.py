@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from ..services.synchronization import SynchronizationService
 from ..utils.paths import app_data_dir
-from . import dest, home, sync
+from . import dest, home, sync, tasks
 from .client import Client, Http, Network, NotionError, PageHit, clean_token
 from .db import Schema, Template, template_for
 from .store import KeyringTokens, MemoryTokens, NotionStore
@@ -145,3 +145,10 @@ class NotionService:
             from .client import Created
             linked = sync.link_created(c, self.store, file_key, content, Created(made.id, made.url), title.strip())
         return Sent(made.id, made.url, linked, made.warnings)
+
+    # tasks -----------------------------------------------------------------------------------------
+    def open_tasks(self) -> tasks.TasksView:
+        return tasks.open_tasks(self.client(), self.store)
+
+    def set_task_status(self, page: str, expect: str | None, to: str) -> str:
+        return tasks.set_status(self.client(), self.store, page, expect, to)

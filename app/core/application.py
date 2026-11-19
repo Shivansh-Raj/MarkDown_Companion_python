@@ -68,6 +68,7 @@ class CompanionApp(QObject):
         self.home.ai_create_requested.connect(self.show_ai_create)
         self.home.voice_requested.connect(self.show_voice)
         self.home.notion_requested.connect(self.show_notion_open)
+        self.home.notion_tasks_requested.connect(self.show_notion_tasks)
         self.home.exit_requested.connect(self.exit)
 
         self.windows.home_requested.connect(self.home.present)
@@ -126,6 +127,10 @@ class CompanionApp(QObject):
             self._voice_win.deleteLater()
             self._voice_win = None
         self.home.hide()
+        if getattr(self, "_notion_tasks_win", None) is not None:
+            self._notion_tasks_win.close()
+            self._notion_tasks_win.deleteLater()
+            self._notion_tasks_win = None
         if self._ai_win is not None:
             self._ai_win.close()
         self.windows.shutdown()
@@ -240,6 +245,17 @@ class CompanionApp(QObject):
 
     def open_path(self, path: str):
         return self.windows.open_file(path)
+
+    def show_notion_tasks(self) -> None:
+        """The Notion tasks window: open and overdue tasks from the Tasks database."""
+        from ..ui.notion_tasks_window import NotionTasksWindow
+        notion = self.windows.notion
+        if not notion.connected() or notion.destination("tasks") is None:
+            self.windows.message.emit("Notion tasks", "Connect Notion and set up a Tasks database in Settings > Notion first.")
+            return
+        if getattr(self, "_notion_tasks_win", None) is None:
+            self._notion_tasks_win = NotionTasksWindow(notion)
+        self._notion_tasks_win.present()
 
     def show_notion_open(self) -> None:
         """Open a Notion page as a local, linked note: choose it, save it into the AI files folder, open it."""

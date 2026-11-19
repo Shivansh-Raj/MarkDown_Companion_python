@@ -28,11 +28,22 @@ class CallWorker(QThread):
 
 
 def run_async(parent: QObject | None, fn: Callable[[], Any], ok: Callable[[Any], None], err: Callable[[str], None]) -> CallWorker:
-    """Calls `fn` on a worker thread; `ok(result)` or `err(message)` then runs on the UI thread."""
-    w = CallWorker(fn, parent)
+    """Calls `fn` on a worker thread; `ok(result)` or `err(message)` then runs on the UI thread.
+
+    The worker is deliberately not a child of `parent`: closing a window while a call is running must not destroy a running
+    thread. If the window is gone when the call finishes, its callback is skipped quietly."""
+    w = CallWorker(fn, None)
     _live.add(w)
-    w.done.connect(ok)
-    w.failed.connect(err)
+
+    def guard(cb: Callable[[Any], None]) -> Callable[[Any], None]:
+        def run(value: Any) -> None:
+            try:
+                cb(value)
+            except RuntimeError:          # the widget that asked has been deleted since
+                pass
+        return run
+    w.done.connect(guard(ok))
+    w.failed.connect(guard(err))
 
     def finished() -> None:
         _live.discard(w)
