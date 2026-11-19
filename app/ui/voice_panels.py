@@ -1007,6 +1007,9 @@ class FollowUpPanel(QWidget):
         lay.addLayout(row)
         lay.addWidget(self.error)
         lay.addWidget(self.view, 1)
+        self.suggest_box = QWidget()
+        QVBoxLayout(self.suggest_box).setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(self.suggest_box)
         self.refresh()
 
     @property
@@ -1031,6 +1034,55 @@ class FollowUpPanel(QWidget):
 
     def _show(self) -> None:
         set_markdown(self.view, fu.follow_up_markdown(self.report) if self.report else "")
+        self._show_notion_suggestions()
+
+    def _show_notion_suggestions(self) -> None:
+        """Notion tasks the transcript suggests are finished. Marking one done is a separate click, and only if it is unchanged in Notion."""
+        while self.suggest_box.layout().count():
+            w = self.suggest_box.layout().takeAt(0).widget()
+            if w is not None:
+                w.deleteLater()
+        if not self.report:
+            return
+        items = {i.id: i for i in self.report.items}
+        for r in self.report.results:
+            item = items.get(r.id)
+            if r.status != "resolved" or not item or not item.notion:
+                continue
+            note = QLabel(f"This Notion task sounds finished: “{item.task}”" + (f" — “{r.evidence}”" if r.evidence else ""))
+            note.setWordWrap(True)
+            btn = QPushButton("Mark done in Notion")
+            btn.setEnabled(bool(item.notion.get("doneStatus")))
+            btn.setToolTip("Sets the task's Status to Done in Notion" if item.notion.get("doneStatus") else "The Tasks database has no Done option")
+            msg = QLabel("")
+            msg.setObjectName("status")
+            btn.clicked.connect(lambda _c=False, it=item, b=btn, m=msg: self._mark_done(it, b, m))
+            holder = QWidget()
+            hl = QVBoxLayout(holder)
+            hl.setContentsMargins(0, 4, 0, 4)
+            hl.addWidget(note)
+            row = QHBoxLayout()
+            row.addWidget(btn)
+            row.addWidget(msg, 1)
+            hl.addLayout(row)
+            self.suggest_box.layout().addWidget(holder)
+
+    def _mark_done(self, item, btn, msg) -> None:
+        from ..notion.worker import run_async
+        notion = getattr(self.ai, "notion", None)
+        if notion is None or not item.notion:
+            return
+        btn.setEnabled(False)
+        msg.setText("Saving…")
+        n = item.notion
+
+        def ok(outcome: str) -> None:
+            msg.setText("Marked done in Notion." if outcome == "done" else "That task changed in Notion since this check, so nothing was written.")
+
+        def fail(message: str) -> None:
+            btn.setEnabled(True)
+            msg.setText(message)
+        run_async(self, lambda: notion.set_task_status(n["page"], n.get("status"), n["doneStatus"]), ok, fail)
 
     def show_error(self, text: str = "") -> None:
         self.error.setText(text)
@@ -1045,7 +1097,7 @@ class FollowUpPanel(QWidget):
         self.check_btn.setEnabled(self.ready)
 
     # data ---------------------------------------------------------------------------------
-    def _gather(self) -> tuple[list[fu.PriorItem], list[tuple[str, str, str]]]:
+    def _gather(self, notion_view=None) -> tuple[list[fu.PriorItem], list[tuple[str, str, str]]]:
         meta = self.svc.meta
         prior = [m for m in self.svc.sessions() if m.mode == "meeting" and m.id != meta.id and m.created_at_ms < meta.created_at_ms][:self.MAX_MEETINGS]
         items: list[fu.PriorItem] = []
@@ -1057,7 +1109,11 @@ class FollowUpPanel(QWidget):
                 summaries.append((m.title, date_stamp(m.created_at_ms), sm["markdown"]))
             for n, a in enumerate((newest("actions") or {}).get("items") or []):
                 items.append(fu.PriorItem(f"{m.id}-{n}", a["task"], a.get("owner"), a.get("deadline"), m.title, date_stamp(m.created_at_ms)))
-        if not items:
+        # Open tasks from the Notion Tasks database join the comparison. They are never changed by the check itself.
+        notion_items = [fu.PriorItem(f"notion:{t.id}", t.title, t.owner, t.due, f"Notion: {notion_view.database}", t.due or "", "open",
+                                     notion={"page": t.id, "status": t.status, "doneStatus": notion_view.done_status, "url": t.url})
+                        for t in (notion_view.rows[:20] if notion_view else [])]
+        if not items and not notion_items:
             raise RuntimeError("No earlier action items found. Generate ACTION ITEMS for an earlier meeting first, then check again.")
         files: list[tuple[str, str]] = []
         for row in self.db.recent_files(self.MAX_FILES):
@@ -1065,7 +1121,7 @@ class FollowUpPanel(QWidget):
                 files.append((os.path.basename(row["path"]), read_snapshot(row["path"]).text))
             except OSError:
                 continue                                   # unreadable or missing file: skip
-        return fu.match_checkbox_state(items, files)[:self.MAX_ITEMS], summaries
+        return (fu.match_checkbox_state(items, files) + notion_items)[:self.MAX_ITEMS + 20], summaries
 
     # run ----------------------------------------------------------------------------------
     def run(self, rethink: bool = False) -> None:
@@ -1076,8 +1132,24 @@ class FollowUpPanel(QWidget):
         if not key:
             self.show_error("No Groq API key. Add one in Settings or under New with AI.")
             return
+        notion = getattr(self.ai, "notion", None)
+        if notion is not None and notion.connected() and notion.destination("tasks"):
+            from ..notion.worker import run_async
+            self.status.setText("Reading your Notion tasks…")
+            self._busy = True
+            self.refresh()
+
+            def go(view) -> None:
+                self._busy = False
+                self.status.setText("")
+                self._run_with(rethink, key, view)
+            run_async(self, notion.open_tasks, go, lambda _m: go(None))        # Notion is optional here: the check still works without it
+            return
+        self._run_with(rethink, key, None)
+
+    def _run_with(self, rethink: bool, key: str, notion_view) -> None:
         try:
-            items, summaries = self._gather()
+            items, summaries = self._gather(notion_view)
         except RuntimeError as e:
             self.show_error(str(e))
             return

@@ -164,3 +164,71 @@ def test_tasks_are_grouped_like_local_ones_and_filtered():
     assert got == [("overdue", ["late"]), ("today", ["today"]), ("upcoming", ["later"]), ("none", ["someday"])]
     assert [r.id for _, rs in tasks.group_tasks(rows, "2026-11-20", "sam") for r in rs] == ["3"]
     assert tasks.group_tasks(rows, "2026-11-20", "zzz") == []
+
+
+# --- briefing --------------------------------------------------------------------------------------------------
+from app.notion import briefing as br
+
+MEET = "aaaaaaaa-e8ac-4eff-bc8f-57f56486db54"
+TASKS = "bbbbbbbb-e8ac-4eff-bc8f-57f56486db54"
+M1, M2 = "11111111-e8ac-4eff-bc8f-57f56486db54", "22222222-e8ac-4eff-bc8f-57f56486db54"
+
+
+def mrow(i, title, project, date):
+    return {"object": "page", "id": i, "url": f"https://notion.so/{i}", "created_time": "2026-01-01T00:00:00Z", "properties": {
+        "Name": {"type": "title", "title": [{"plain_text": title}]}, "Project": {"type": "rich_text", "rich_text": [{"plain_text": project}]},
+        "Date": {"type": "date", "date": {"start": date}}}}
+
+
+def trow(i, title, meeting):
+    return {"object": "page", "id": i, "url": "u", "properties": {"Name": {"type": "title", "title": [{"plain_text": title}]},
+            "Status": {"type": "select", "select": {"name": "Not started"}},
+            "Meeting": {"type": "relation", "relation": [{"id": meeting}] if meeting else []}}}
+
+
+class Brief:
+    def send(self, token, method, path, body):
+        if path == f"/v1/data_sources/{TASKS}":
+            return Response(200, {"id": TASKS, "title": [{"plain_text": "Tasks"}], "properties": {
+                "Name": {"id": "t", "name": "Name", "type": "title", "title": {}},
+                "Status": {"id": "s", "name": "Status", "type": "select", "select": {"options": [{"name": "Not started"}, {"name": "Done"}]}},
+                "Meeting": {"id": "m", "name": "Meeting", "type": "relation", "relation": {}}}})
+        if path == f"/v1/data_sources/{MEET}/query":
+            return Response(200, {"results": [mrow(M2, "Budget review", "Finance", "2026-11-10"), mrow(M1, "Apollo sync", "Apollo", "2026-11-03")]})
+        if path == f"/v1/data_sources/{TASKS}/query":
+            return Response(200, {"results": [trow("cccccccc-e8ac-4eff-bc8f-57f56486db54", "Send notes", M1), trow("dddddddd-e8ac-4eff-bc8f-57f56486db54", "Pay invoice", M2),
+                                              trow("eeeeeeee-e8ac-4eff-bc8f-57f56486db54", "Loose", None)]})
+        if path.endswith("/markdown?markdown_version=v2"):
+            return Response(200, {"markdown": "## Decisions\n\n- Ship on Friday\n", "truncated": False})
+        raise AssertionError(path)
+
+
+def brief_store(qapp, tmp_path, link=True):
+    st = NotionStore(SettingsManager(Database(tmp_path / "db.sqlite")), tmp_path / "s")
+    st.set_destination("meetings", {"data_source_id": MEET, "title": "Meetings", "mapping": [{"field": "project", "property": "Project"}, {"field": "date", "property": "Date"}]})
+    st.set_destination("tasks", {"data_source_id": TASKS, "title": "Tasks", "mapping": [{"field": "status", "property": "Status"}] + ([{"field": "meeting", "property": "Meeting"}] if link else [])})
+    return st
+
+
+def test_decisions_come_from_the_usual_headings_only():
+    md = "## Summary\n\n- not this\n\n## Key takeaways\n\n- Ship on Friday\n- [ ] Priya owns it\n\n## Other\n\n- nor this\n\n## Decisions made\n\n1. Use Postgres\n"
+    assert br.extract_decisions(md) == ["Ship on Friday", "Priya owns it", "Use Postgres"] and br.extract_decisions("- a bullet") == []
+
+
+def test_briefing_picks_matching_meetings_with_decisions_and_linked_tasks(qapp, tmp_path):
+    b = br.briefing(c(Brief()), brief_store(qapp, tmp_path), "Apollo roadmap")
+    assert [(m.title, m.date, m.decisions) for m in b.meetings] == [("Apollo sync", "2026-11-03", ["Ship on Friday"])] and not b.latest_instead
+    assert [t.title for t in b.tasks] == ["Send notes"] and b.tasks_note is None, "only tasks linked to the chosen meetings"
+
+
+def test_briefing_falls_back_to_the_latest_meetings_and_says_so(qapp, tmp_path):
+    st = brief_store(qapp, tmp_path)
+    b = br.briefing(c(Brief()), st, "quantum computing")
+    assert b.latest_instead and len(b.meetings) == 2 and len(b.tasks) == 2
+    none = br.briefing(c(Brief()), st, "")
+    assert not none.latest_instead and len(none.meetings) == 2
+
+
+def test_briefing_without_a_meeting_column_shows_open_tasks_with_a_note(qapp, tmp_path):
+    b = br.briefing(c(Brief()), brief_store(qapp, tmp_path, link=False), "Apollo")
+    assert len(b.tasks) == 3 and "not linked to meetings" in b.tasks_note

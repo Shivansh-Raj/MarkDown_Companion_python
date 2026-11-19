@@ -153,6 +153,10 @@ class NotionService:
     def set_task_status(self, page: str, expect: str | None, to: str) -> str:
         return tasks.set_status(self.client(), self.store, page, expect, to)
 
+    def briefing(self, topic: str):
+        from .briefing import briefing
+        return briefing(self.client(), self.store, topic)
+
     # asking ----------------------------------------------------------------------------------------
     def page_text(self, page: str) -> tuple[str, bool]:
         """A page's Markdown for asking about it (unknown-block tags removed) and whether Notion returned only part of it."""

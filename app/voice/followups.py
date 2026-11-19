@@ -25,6 +25,8 @@ class PriorItem:
     meeting_date: str
     state: str = "unknown"             # from the Markdown checkbox: "open" | "done" | "unknown"
     file: str | None = None
+    # Set for tasks read from the Notion Tasks database: what is needed to mark one done once a suggestion is accepted.
+    notion: dict | None = None
 
 
 @dataclass

@@ -164,6 +164,8 @@ class VoiceWindow(QWidget):
         self.consent_btn.clicked.connect(self._give_consent)
         self.title_edit = QLineEdit()
         self.title_edit.setPlaceholderText("Title (optional)")
+        from .briefing_box import BriefingBox
+        self.briefing = BriefingBox(getattr(self.ai, "notion", None))
         self.mic_label = QLabel("MICROPHONE")
         self.mic_label.setObjectName("section")
         self.mic_box = QComboBox()
@@ -176,7 +178,7 @@ class VoiceWindow(QWidget):
         row.addWidget(self.start_btn)
         row.addWidget(self.setup_back)
         row.addStretch(1)
-        for wdg in (self.setup_title, self.setup_hint, self.consent_label, self.consent_btn, self.title_edit, self.mic_label, self.mic_box):
+        for wdg in (self.setup_title, self.setup_hint, self.consent_label, self.consent_btn, self.title_edit, self.briefing, self.mic_label, self.mic_box):
             lay.addWidget(wdg)
         lay.addLayout(row)
         lay.addStretch(1)
@@ -298,6 +300,7 @@ class VoiceWindow(QWidget):
         if not devices:
             self.mic_box.addItem("No microphone found", None)
         self.title_edit.clear()
+        self.briefing.setup(mode, "")
         self.stack.setCurrentIndex(PAGE_SETUP)
 
     def _give_consent(self) -> None:

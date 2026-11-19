@@ -28,6 +28,7 @@ class NotionTask:
     status: str | None
     owner: str | None
     url: str
+    meeting_ids: list[str] = field(default_factory=list)      # the meeting pages this task is linked to (the mapped Meeting relation)
 
 
 @dataclass
@@ -37,6 +38,7 @@ class TasksView:
     truncated: bool = False
     done_status: str | None = None          # the option that ticking a task sets
     read_only_reason: str | None = None     # why ticking is not available, if it is not
+    links_meetings: bool = False            # whether the Meeting column is mapped, so tasks can be tied to meetings
 
 
 @dataclass
@@ -45,6 +47,7 @@ class _Cols:
     due: Prop | None
     status: Prop | None
     owner: Prop | None
+    meeting: Prop | None = None
 
 
 def _columns(schema: Schema, mapping: list[dict]) -> _Cols:
@@ -56,7 +59,8 @@ def _columns(schema: Schema, mapping: list[dict]) -> _Cols:
         raise NotionError("The tasks database has no title column.")
     due, status = find("due"), find("status")
     return _Cols(title, due if due and due.type == "date" else None,
-                 status if status and status.type in ("status", "select") else None, find("owner"))
+                 status if status and status.type in ("status", "select") else None, find("owner"),
+                 (lambda m: m if m and m.type == "relation" else None)(find("meeting")))
 
 
 def _plain(parts) -> str:
@@ -85,7 +89,9 @@ def _task_from(page: dict, c: _Cols) -> NotionTask | None:
         elif p.get("type") == "select":
             owner = (p.get("select") or {}).get("name")
     return NotionTask(page["id"], title if title.strip() else "Untitled", due, _status_of(page, c.status) if c.status else None,
-                      owner if owner and owner.strip() else None, page.get("url") or "")
+                      owner if owner and owner.strip() else None, page.get("url") or "",
+                      [i for i in (parse_page_id(str(r.get("id", ""))) for r in ((props.get(c.meeting.name) or {}).get("relation") or []) if isinstance(r, dict)) if i]
+                      if c.meeting else [])
 
 
 def _open_filter(status: Prop) -> dict | None:
@@ -123,7 +129,7 @@ def open_tasks(client: Client, store: NotionStore) -> TasksView:
         reason = "Map a Status column in Settings > Notion > Tasks to tick tasks off here."
     elif done is None:
         reason = 'The Status column has no "Done" option, so tasks cannot be ticked off here.'
-    return TasksView(dest["title"], rows, truncated, done, reason)
+    return TasksView(dest["title"], rows, truncated, done, reason, cols.meeting is not None)
 
 
 def set_status(client: Client, store: NotionStore, page: str, expect: str | None, to: str) -> str:
