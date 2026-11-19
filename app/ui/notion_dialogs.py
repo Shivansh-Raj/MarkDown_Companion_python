@@ -22,6 +22,7 @@ class PagePickerDialog(QDialog):
         use_body_font(self, 12)
         self.notion, self.what = notion, what
         self.chosen: PageHit | None = None
+        self.action = "open"                # "open" | "ask" | "askdb" (page pickers offer asking too)
         self.setWindowTitle("Choose a Notion " + what)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.setMinimumWidth(420)
@@ -44,11 +45,23 @@ class PagePickerDialog(QDialog):
         self.choose_btn.clicked.connect(self.choose)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
+        self.ask_btn = QPushButton("Ask")
+        self.ask_btn.setToolTip("Ask a question about this page without saving it")
+        self.ask_btn.setEnabled(False)
+        self.ask_btn.clicked.connect(lambda: self._choose_as("ask"))
+        self.askdb_btn = QPushButton("Ask a database…")
+        self.askdb_btn.setToolTip("Ask a question across one of your databases")
+        self.askdb_btn.clicked.connect(lambda: (setattr(self, "action", "askdb"), self.accept()))
+        for b in (self.ask_btn, self.askdb_btn):
+            b.setVisible(False)
+        self.results.currentItemChanged.connect(lambda *_: self.ask_btn.setEnabled(self.results.currentItem() is not None))
         top = QHBoxLayout()
         top.addWidget(self.query, 1)
         top.addWidget(self.find_btn)
         bottom = QHBoxLayout()
+        bottom.addWidget(self.askdb_btn)
         bottom.addStretch(1)
+        bottom.addWidget(self.ask_btn)
         bottom.addWidget(self.choose_btn)
         bottom.addWidget(cancel)
         lay = QVBoxLayout(self)
@@ -83,6 +96,16 @@ class PagePickerDialog(QDialog):
     def _fail(self, message: str) -> None:
         self.find_btn.setEnabled(True)
         self.status.setText(message)
+
+    def offer_ask(self) -> None:
+        """Also offer Ask (this page) and Ask a database (used by the home screen's Notion button)."""
+        self.ask_btn.setVisible(True)
+        self.askdb_btn.setVisible(True)
+        self.choose_btn.setText("Open as note")
+
+    def _choose_as(self, action: str) -> None:
+        self.action = action
+        self.choose()
 
     def choose(self) -> None:
         item = self.results.currentItem()

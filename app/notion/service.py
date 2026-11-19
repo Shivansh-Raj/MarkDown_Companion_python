@@ -152,3 +152,14 @@ class NotionService:
 
     def set_task_status(self, page: str, expect: str | None, to: str) -> str:
         return tasks.set_status(self.client(), self.store, page, expect, to)
+
+    # asking ----------------------------------------------------------------------------------------
+    def page_text(self, page: str) -> tuple[str, bool]:
+        """A page's Markdown for asking about it (unknown-block tags removed) and whether Notion returned only part of it."""
+        from .askdb import strip_unknown
+        p = self.client().read_page(page)
+        return strip_unknown(p.markdown).strip(), p.truncated
+
+    def db_pages(self, data_source: str, question: str) -> dict:
+        from .askdb import pages_for
+        return pages_for(self.client(), data_source, question)

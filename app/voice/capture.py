@@ -91,10 +91,15 @@ class QtSource(_Source):
         self._channels, self._rate = fmt.channelCount(), fmt.sampleRate()
         self.name = dev.description()
         self._QAudio = QAudio
-        self._src = QAudioSource(dev, fmt, self)
+        self._dev, self._qfmt, self._QAudioSource = dev, fmt, QAudioSource
         self._io = None
         self._stopping = False
-        self._src.stateChanged.connect(self._state)
+        self._src = self._new_source()
+
+    def _new_source(self):
+        src = self._QAudioSource(self._dev, self._qfmt, self)
+        src.stateChanged.connect(self._state)
+        return src
 
     def _state(self, state) -> None:
         if not self._stopping and state == self._QAudio.State.StoppedState and self._src.error() != self._QAudio.Error.NoError:
@@ -111,12 +116,25 @@ class QtSource(_Source):
             raise RuntimeError("The microphone could not be opened. Check Microphone access in System Settings.")
         self._io.readyRead.connect(self._read)
 
-    def pause(self) -> None: self._src.suspend()
-    def resume(self) -> None: self._src.resume()
+    def pause(self) -> None:
+        """Closes the microphone while paused (suspending would keep it open and the system's mic indicator on)."""
+        self._stopping = True
+        self._src.stop()
+        self._src.deleteLater()
+        self._src, self._io = None, None
+
+    def resume(self) -> None:
+        """Opens a fresh stream, which also recovers from a changed or re-plugged device."""
+        if self._src is not None:
+            return
+        self._stopping = False
+        self._src = self._new_source()
+        self.start()
 
     def stop(self) -> None:
         self._stopping = True
-        self._src.stop()
+        if self._src is not None:
+            self._src.stop()
 
 
 # --------------------------------------------------------------- recorder ----

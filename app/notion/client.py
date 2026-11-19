@@ -254,6 +254,15 @@ class Client:
         return ([r for r in v.get("results", []) if isinstance(r, dict)], nxt,
                 (v.get("request_status") or {}).get("type") == "incomplete")
 
+    def query_recent(self, ds: str) -> list[dict]:
+        """Up to 100 rows, most recently edited first."""
+        pid = parse_page_id(ds)
+        if not pid:
+            raise NotionError("That is not a Notion database link or id.")
+        v = self.call("POST", f"/v1/data_sources/{pid}/query",
+                      {"page_size": 100, "sorts": [{"timestamp": "last_edited_time", "direction": "descending"}]})
+        return [r for r in v.get("results", []) if isinstance(r, dict)]
+
     def get_page(self, page: str) -> dict:
         """The whole page object (properties, parent, trash flag)."""
         return self.call("GET", f"/v1/pages/{self._id(page)}")

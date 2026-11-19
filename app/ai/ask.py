@@ -16,6 +16,7 @@ class Turn:
     answer: str
     sources: list[tuple[str, bool]] | None = None      # (quote, verified against the file)
     error: bool = False
+    headings: dict[str, str] | None = None             # verified quote -> the section it is in
 
 
 def build_system_prompt() -> str:
@@ -182,3 +183,68 @@ def visible_quotes(turn: Turn) -> list[str]:
 def needs_quote_warning(turn: Turn) -> bool:
     """A real answer none of whose quotes could be matched in the file: the user should double-check it."""
     return not turn.error and not is_not_found(turn.answer) and not visible_quotes(turn)
+
+
+def heading_for_quote(doc: str, quote: str) -> str | None:
+    """The heading of the section a quote is in (the nearest '#' heading above it), or None when it is before any heading or
+    spans two sections. Matching ignores case and punctuation, like the quote check itself."""
+    sections: list[tuple[str | None, list[str]]] = [(None, [])]
+    for line in doc.split("\n"):
+        m = re.match(r"^#{1,6}\s+(.*?)\s*#*\s*$", line)
+        if m:
+            sections.append((m.group(1), []))
+        else:
+            sections[-1][1].append(line)
+    for heading, lines in sections:
+        if in_transcript(quote, squash(" ".join(lines))):
+            return heading
+    return None
+
+
+def with_headings(turn: Turn, doc: str) -> Turn:
+    turn.headings = {q: h for q, ok in (turn.sources or []) if ok and (h := heading_for_quote(doc, q))}
+    return turn
+
+
+def archive_markdown(turn: Turn, source_name: str, source_url: str | None = None) -> str:
+    """An approved answer as a Notion page body: question, answer, and only the verified quotes, each naming its section."""
+    where = f"[{source_name}]({source_url})" if source_url else source_name
+    quotes = [f"> {' '.join(q.split())}\n\n— {(turn.headings or {}).get(q) + ', ' if (turn.headings or {}).get(q) else ''}{where}"
+              for q in visible_quotes(turn)]
+    parts = [f"**Question:** {turn.question.strip()}", f"**Source:** {where}", "## Answer", turn.answer.strip()]
+    if quotes:
+        parts += ["## Verified quotes", *quotes]
+    return "\n\n".join(parts) + "\n"
+
+
+def database_document(pages: list[dict], question: str, budget: int = 10_000) -> str:
+    """Several Notion pages as one document for the single-document Ask: each page's best sections under '## <page> > <section>'
+    headings, so a verified quote names its page and section. At most 3 sections per page and `budget` characters in all."""
+    words = {w for w in re.findall(r"[\w]{3,}", question.lower()) if w not in _FILLER}
+    cands = []
+    for pi, pg in enumerate(pages):
+        heading, buf = "", []
+
+        def push():
+            text = "\n".join(buf).strip()[:1200]
+            if text:
+                cands.append((sum(1 for w in words if w in text.lower()), pi, len(cands), pg["title"], heading, text))
+        for line in pg["markdown"].split("\n"):
+            m = re.match(r"^#{1,6}\s+(.*)$", line)
+            if m:
+                push()
+                buf, heading = [], m.group(1).strip()
+                continue
+            buf.append(line)
+        push()
+    hit = any(c[0] > 0 for c in cands)
+    ranked = sorted((c for c in cands if c[0] > 0), key=lambda c: (-c[0], c[1], c[2])) if hit else sorted(cands, key=lambda c: (c[1], c[2]))
+    out, per, total = [], {}, 0
+    for score, pi, _, title, heading, text in ranked:
+        if per.get(pi, 0) >= (3 if hit else 1) or total + len(text) > budget:
+            continue
+        per[pi] = per.get(pi, 0) + 1
+        total += len(text)
+        same = heading.strip().lower() == title.strip().lower()          # "# Sprint" inside the page "Sprint" adds nothing
+        out.append(f"## {title}{' > ' + heading if heading and not same else ''}\n\n{text}")
+    return "\n\n".join(out)

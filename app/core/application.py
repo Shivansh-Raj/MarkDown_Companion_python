@@ -127,6 +127,10 @@ class CompanionApp(QObject):
             self._voice_win.deleteLater()
             self._voice_win = None
         self.home.hide()
+        for w in getattr(self, "_notion_ask_windows", []):
+            w.close()
+            w.deleteLater()
+        self._notion_ask_windows = []
         if getattr(self, "_notion_tasks_win", None) is not None:
             self._notion_tasks_win.close()
             self._notion_tasks_win.deleteLater()
@@ -257,6 +261,34 @@ class CompanionApp(QObject):
             self._notion_tasks_win = NotionTasksWindow(notion)
         self._notion_tasks_win.present()
 
+    def _ask_dialog(self):
+        from ..ui.notion_ask import NotionAskDialog
+        d = NotionAskDialog(self.windows.ai)
+        self._notion_ask_windows = [w for w in getattr(self, "_notion_ask_windows", []) if w.isVisible()] + [d]
+        return d
+
+    def _ask_notion_page(self, hit) -> None:
+        from ..notion.worker import run_async
+        notion = self.windows.notion
+
+        def opened(res) -> None:
+            text, partial = res
+            if not text:
+                self.windows.message.emit("Ask Notion", "That page has no text to ask about.")
+                return
+            d = self._ask_dialog()
+            d.panel.open_notion_page(hit.title, hit.url if hit.url.startswith("http") else (hit.id if hit.id.startswith("http") else ""), text, partial)
+            d.show()
+        run_async(self, lambda: notion.page_text(hit.id), opened, lambda m: self.windows.message.emit("Could not read the Notion page", m))
+
+    def _ask_notion_database(self) -> None:
+        from ..ui.notion_dialogs import PagePickerDialog
+        dlg = PagePickerDialog(self.windows.notion, "database", self.home)
+        if dlg.exec() and dlg.chosen:
+            d = self._ask_dialog()
+            d.panel.open_database(dlg.chosen)
+            d.show()
+
     def show_notion_open(self) -> None:
         """Open a Notion page as a local, linked note: choose it, save it into the AI files folder, open it."""
         from ..notion.worker import run_async
@@ -266,7 +298,16 @@ class CompanionApp(QObject):
             self.windows.message.emit("Notion is not connected", "Add a connection token in Settings > Notion first.")
             return
         dlg = PagePickerDialog(notion, "page", self.home)
-        if not (dlg.exec() and dlg.chosen):
+        dlg.offer_ask()
+        if not dlg.exec():
+            return
+        if dlg.action == "askdb":
+            self._ask_notion_database()
+            return
+        if not dlg.chosen:
+            return
+        if dlg.action == "ask":
+            self._ask_notion_page(dlg.chosen)
             return
         page, folder = dlg.chosen.id, self.windows.ai.save_dir()
 
