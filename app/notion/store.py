@@ -117,7 +117,8 @@ class KeyringTokens:
             import keyring
             return keyring
         except Exception:
-            raise NotionError("No secure credential store is available, so the Notion token cannot be saved safely.") from None
+            raise NotionError("The 'keyring' package is not installed, so there is nowhere secure to keep the Notion token. "
+                              "Install it with:  pip install keyring  (it is listed in requirements.txt), then restart the app.") from None
 
     def get(self) -> str | None:
         try:
@@ -133,7 +134,8 @@ class KeyringTokens:
         except NotionError:
             raise
         except Exception as e:
-            raise NotionError(f"Could not save the token in the system credential store: {e}") from None
+            raise NotionError(f"Could not save the token in the system credential store ({type(e).__name__}: {e}). "
+                              "On Linux this needs a running keyring service such as GNOME Keyring or KWallet.") from None
 
     def delete(self) -> None:
         try:

@@ -264,7 +264,8 @@ class NotionPanel(QWidget):
         self.open_btn.setVisible(bool(link.url))
         if not keep_msg:
             self.say("")
-        self._show_only("linked")
+        if self._plan is None:               # a late reload must not replace a push preview the user is reading
+            self._show_only("linked")
 
     def refresh(self) -> None:
         self._set_busy(True)

@@ -97,3 +97,25 @@ database; it is sent only to `api.groq.com`. Use **Test** to check it. The model
 models your key can use. Settings also has the folder for AI-created files (default `~/Documents/MarkdownCompanion`)
 and an **Animations** switch (typing cat, diff reveal). AI edits send the chosen text to Groq, so use the narrower
 scopes for anything sensitive. Without a key the app behaves exactly as before.
+
+## Notion
+
+Connect Notion in Settings > Notion with a token from Notion's Developer portal. A *connection* token only reaches pages you
+share with it (page menu > Add connections); a *personal access token* acts as you and reaches every page you can see.
+
+The token is stored only in the operating system's credential store (Windows Credential Manager, macOS Keychain, or the Secret
+Service on Linux) through the `keyring` package. **There is deliberately no plaintext fallback for it**, unlike the Groq key. If the
+`keyring` package is missing from your environment you will see "The 'keyring' package is not installed ... nowhere secure to keep
+the Notion token". Fix it with:
+
+```
+.\.venv\Scripts\pip install -r requirements.txt     # Windows
+.venv/bin/pip install -r requirements.txt             # macOS / Linux
+```
+
+then restart the app. (`keyring` is listed in `requirements.txt`; it is only absent when the environment was created before
+it was added.)
+
+What you can do with Notion: send a note to a new page, open a Notion page as a linked note (home screen > Notion), refresh from or
+push edits to it (with a preview and a conflict check), export meetings and practice sessions to Notion databases with their
+columns mapped, turn action items into task rows, and see open tasks in the Notion tasks window (home screen > Notion tasks).
