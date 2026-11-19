@@ -76,7 +76,8 @@ class AskPanel(QWidget):
         super().__init__(parent)
         self.ai = ai
         self.turns: list[ask.Turn] = []
-        self._doc = ""
+        self._doc = ""            # the text sent with the current question (an excerpt when the file is long)
+        self._source = ""         # the whole file text
         self._truncated = False
         self._worker: StreamWorker | None = None
         self._asked: str | None = None
@@ -154,8 +155,9 @@ class AskPanel(QWidget):
 
     def open_for(self, source: str) -> None:
         """Called each time the panel opens, with the text to search (the edit draft if editing, else the file)."""
+        self._source = source
         self._doc, self._truncated = ask.limit_doc(source)
-        self.cut.setVisible(self._truncated)
+        self.cut.setVisible(False)
         self.show_error()
         self._render()
         self._refresh()
@@ -163,8 +165,7 @@ class AskPanel(QWidget):
 
     def set_source(self, source: str) -> None:
         """The file changed on disk while the panel is open: later questions search the new text (the conversation stays)."""
-        self._doc, self._truncated = ask.limit_doc(source)
-        self.cut.setVisible(self._truncated)
+        self._source = source
 
     def show_error(self, text: str = "") -> None:
         self.error.setText(text)
@@ -199,6 +200,11 @@ class AskPanel(QWidget):
             self.show_error("No Groq API key yet. Open New with AI from the home screen and set it with the Key button.")
             return
         self.input.clear()
+        ex = ask.excerpt_for_ask(self._source, q)
+        self._doc = ex.text
+        self.cut.setText(f"This file is long, so only the most relevant parts are sent ({ex.sent} of {ex.total} pieces). "
+                         "Groq's free plan limits how much it takes per minute.")
+        self.cut.setVisible(ex.partial)
         self._asked, self._live = q, ""
         w = StreamWorker(key, ask.build_system_prompt(), ask.build_user_prompt(q, [t for t in self.turns if not t.error], self._doc), self)
         w.text.connect(self._on_text)

@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, QRect, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 
 from ..ai.services import AiServices
+from ..notion.service import NotionService
 from ..services.persistence import Database
 from ..ui.markdown_window import DEFAULT_SIZE, MarkdownWindow
 from ..utils.geometry import clamp_to_screens
@@ -28,6 +29,7 @@ class WindowManager(QObject):
         super().__init__(parent)
         self._files, self._db, self._settings = files, db, settings
         self.ai = AiServices(settings)
+        self.notion = NotionService(settings, sync_service=files.sync)
         self._windows: dict[str, MarkdownWindow] = {}
         self._quitting = False
         self._save_timer = QTimer(self, singleShot=True, interval=SAVE_DEBOUNCE_MS)
@@ -72,6 +74,7 @@ class WindowManager(QObject):
         compact = bool(saved.get("compact", self._settings.get("compact_default")))
         win = MarkdownWindow(key, path, theme, opacity, False)
         win.set_ai_services(self.ai)
+        win.set_notion_service(self.notion)
         win.set_font_scale(self._settings.get("font_scale"))
         self._apply_geometry(win, saved)
         if compact:

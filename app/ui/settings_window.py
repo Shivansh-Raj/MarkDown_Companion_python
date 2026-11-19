@@ -23,11 +23,12 @@ def _seq_text(edit: QKeySequenceEdit) -> str:
 class SettingsWindow(QDialog):
     applied = Signal()
 
-    def __init__(self, settings: SettingsManager, shortcut_status: str = "", ai=None):
+    def __init__(self, settings: SettingsManager, shortcut_status: str = "", ai=None, notion=None):
         super().__init__()
         use_body_font(self, 12)                      # same text look as the Markdown view (and follows the Text size setting)
         self.settings = settings
         self.ai = ai
+        self.notion = notion
         self._test: KeyTestWorker | None = None
         self.setWindowTitle("Markdown Companion V2 - Settings")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
@@ -126,6 +127,11 @@ class SettingsWindow(QDialog):
             self.animations = QCheckBox("Animations (typing cat, diff reveal)")
             self.animations.setChecked(settings.get("animations"))
             form.addRow("", self.animations)
+
+        if notion is not None:
+            from .notion_settings import NotionSettings
+            self.notion_section = NotionSettings(notion)
+            form.addRow(self.notion_section)
 
         apply_btn = QPushButton("Apply")
         apply_btn.clicked.connect(self.apply)

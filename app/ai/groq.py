@@ -82,6 +82,10 @@ def _request(url: str, api_key: str, body: dict | None = None):
             raise GroqError("Groq rejected the API key. Check it in Settings.") from None
         if e.code == 429:
             raise GroqError("Groq rate limit reached. Try again in a moment.") from None
+        if e.code == 413:
+            m = re.search(r"Limit (\d+), Requested (\d+)", detail)
+            size = f" Your plan allows {int(m.group(1)):,} tokens a minute and this needed about {int(m.group(2)):,}." if m else ""
+            raise GroqError(f"That is too much text for Groq's limit on your plan.{size} Ask about a smaller part, wait a minute, or upgrade the plan.") from None
         raise GroqError(f"Groq request failed ({e.code}). {detail}".strip()) from None
     except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError, OSError):
         raise GroqError("Can't reach Groq. Check your internet connection and try again.") from None

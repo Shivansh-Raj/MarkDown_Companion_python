@@ -18,7 +18,7 @@ from .title_bar import TitleBar
 
 EDGE = 6                      # resize/shadow margin around the frame
 CORNER = 14
-MIN_W, MIN_H = 330, 140
+MIN_W, MIN_H = 356, 140
 OPACITY_STEPS = (1.0, 0.85, 0.7, 0.55)
 DEFAULT_SIZE = (420, 520)
 _E = Qt.Edge
@@ -104,6 +104,8 @@ class MarkdownWindow(QWidget):
         self._ai_services = None
         self.ai_panel = None
         self.ask_panel = None
+        self.notion_panel = None
+        self._notion_open = False
         self._ask_open = False
         self._ai_open = False
         self._ai_pending: str | None = None      # AI result waiting for edit mode to start
@@ -188,6 +190,7 @@ class MarkdownWindow(QWidget):
         self.title_bar.edit_clicked.connect(lambda: self.edit_requested.emit(self.key))
         self.title_bar.ai_clicked.connect(self.open_ai)
         self.title_bar.ask_clicked.connect(self.open_ask)
+        self.title_bar.notion_clicked.connect(self.open_notion)
         self.save_btn.clicked.connect(self.request_save)
         self.cancel_btn.clicked.connect(self.cancel_edit)
         self.title_bar.minimize_clicked.connect(self.showMinimized)
@@ -371,6 +374,54 @@ class MarkdownWindow(QWidget):
         QShortcut(QKeySequence("Escape"), self.ai_panel, activated=self._ai_escape,
                   context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
 
+    def set_notion_service(self, notion) -> None:
+        from .notion_panel import NotionPanel
+        self.notion_panel = NotionPanel(notion, self)
+        self.notion_panel.hide()
+        self.notion_panel.closed.connect(self.close_notion)
+        self.notion_panel.opened_url.connect(self._open_url)
+        self.frame.layout().insertWidget(self.frame.layout().indexOf(self.view_box), self.notion_panel, 1)
+        QShortcut(QKeySequence("Escape"), self.notion_panel, activated=self.close_notion,
+                  context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
+
+    @staticmethod
+    def _open_url(url: str) -> None:
+        if url.startswith(("https://", "http://")):
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl(url))
+
+    def open_notion(self) -> None:
+        if self.notion_panel is None or self._notion_open or not self._available:
+            return
+        if self._compact:
+            self.set_compact(False)
+        if self._ask_open:
+            self.close_ask()
+        if self._ai_open:
+            self.close_ai()
+        self.notion_panel.open_for(self.key, self.path, self.editor.toPlainText() if self._editing else self._source)
+        self._set_notion_open(True)
+
+    def _set_notion_open(self, on: bool) -> None:
+        self._notion_open = on
+        self.notion_panel.setVisible(on)
+        self.progress.setVisible(self._has_tasks and not on and not self._compact)
+        if on:
+            self.view_box.hide()
+            self.editor.hide()
+            self.editbar.hide()
+        elif self._editing:
+            self.editbar.show()
+            self.editor.show()
+            self.editor.setFocus()
+        else:
+            self.view_box.setVisible(not self._compact)
+
+    def close_notion(self) -> None:
+        if self._notion_open:
+            self._set_notion_open(False)
+
     def _ai_escape(self) -> None:
         panel = self.ai_panel
         if panel.stack.currentIndex() == 1:
@@ -388,6 +439,8 @@ class MarkdownWindow(QWidget):
             self.set_compact(False)
         if self._ai_open:
             self.close_ai()
+        if self._notion_open:
+            self.close_notion()
         self.ask_panel.open_for(self.editor.toPlainText() if self._editing else self._source)
         self._set_ask_open(True)
 
@@ -421,6 +474,8 @@ class MarkdownWindow(QWidget):
             return
         if self._ask_open:
             self.close_ask()
+        if self._notion_open:
+            self.close_notion()
         if self._compact:
             self.set_compact(False)
         if self._editing:

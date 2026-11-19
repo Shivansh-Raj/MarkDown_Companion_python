@@ -48,6 +48,7 @@ class ElidedLabel(QLabel):
 class TitleBar(QWidget):
     ai_clicked = Signal()
     ask_clicked = Signal()
+    notion_clicked = Signal()
     edit_clicked = Signal()
     home_clicked = Signal()
     compact_clicked = Signal()
@@ -58,7 +59,7 @@ class TitleBar(QWidget):
     settings_clicked = Signal()
 
     def __init__(self, title: str, parent: QWidget | None = None,
-                 buttons: tuple[str, ...] = ("ai", "ask", "edit", "home", "compact", "refresh", "opacity", "minimize", "close")):
+                 buttons: tuple[str, ...] = ("ai", "ask", "notion", "edit", "home", "compact", "refresh", "opacity", "minimize", "close")):
         super().__init__(parent)
         self.setObjectName("titlebar")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -73,10 +74,13 @@ class TitleBar(QWidget):
         self.edit_btn = None
         self.ai_btn = None
         self.ask_btn = None
+        self.notion_btn = None
         if "ai" in buttons:
             self.ai_btn = self._button("AI", "Edit with AI", self.ai_clicked, role="wide")
         if "ask" in buttons:
             self.ask_btn = self._button("ASK", "Ask AI a question about this file", self.ask_clicked, role="wide")
+        if "notion" in buttons:
+            self.notion_btn = self._button("\u25a4", "Notion: send this note to Notion, or sync it with its Notion page", self.notion_clicked)
         if "edit" in buttons:
             self.edit_btn = self._button("EDIT", "Edit the Markdown source (Ctrl+E)", self.edit_clicked, role="wide")
         if "settings" in buttons:

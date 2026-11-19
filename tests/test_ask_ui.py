@@ -178,10 +178,15 @@ def test_escape_stops_a_running_answer_then_closes_the_panel(ctx):
     assert not w._ask_open
 
 
-def test_a_huge_file_is_flagged_as_only_partly_searched(ctx):
+def test_a_huge_file_is_flagged_as_only_partly_sent_and_the_excerpt_fits_the_limit(ctx):
     app, w, p, state, _ = ctx
     w.open_ask()
     p.set_source("line of text\n" * 20_000)
-    assert p.cut.isVisibleTo(p) is True or p.cut.isHidden() is False
+    p.ask("What is left?")
+    assert wait_for(lambda: p._worker is None)
+    assert p.cut.isHidden() is False and "most relevant parts" in p.cut.text()
+    assert len(p._doc) <= 14_000
     p.set_source("small")
-    assert p.cut.isHidden()
+    p.ask("What is left now?")
+    assert wait_for(lambda: p._worker is None)
+    assert p.cut.isHidden() and p._doc == "small"

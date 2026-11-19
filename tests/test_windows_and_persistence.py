@@ -37,7 +37,7 @@ def test_window_state_persists_across_sessions(make_app, md, qapp, data_dir):
     p = md("persist.md")
     app = make_app()
     w = app.open_path(str(p))
-    w.setGeometry(120, 140, 333, 444)
+    w.setGeometry(120, 140, 401, 444)
     w.set_opacity(0.7)
     key = w.key
     app.windows.save_all()
@@ -45,14 +45,14 @@ def test_window_state_persists_across_sessions(make_app, md, qapp, data_dir):
 
     db = Database(data_dir / "companion.db")
     row = db.get_file(key)
-    assert (row["x"], row["y"], row["w"], row["h"]) == (120, 140, 333, 444)
+    assert (row["x"], row["y"], row["w"], row["h"]) == (120, 140, 401, 444)
     assert abs(row["opacity"] - 0.7) < 1e-6 and row["is_open"] == 1   # still flagged for restore
     db.close()
 
     app2 = make_app()
     w2 = app2.open_path(str(p))
     g = w2.geometry()
-    assert (g.x(), g.y(), g.width(), g.height()) == (120, 140, 333, 444)
+    assert (g.x(), g.y(), g.width(), g.height()) == (120, 140, 401, 444)
     assert abs(w2.opacity - 0.7) < 1e-6
 
 

@@ -27,6 +27,10 @@ DEFAULTS: dict[str, Any] = {
     "ai_history": [],                     # recent AI-edit instructions, newest first
     "animations": True,                   # typing cat, diff reveal
     "groq_api_key": "",                   # only used when the OS keychain is unavailable
+    "notion_home": {},                    # the Notion page everything MC creates goes into
+    "notion_sections": {},                # section key -> page id under the home page
+    "notion_links": {},                   # local file key -> linked Notion page and last-synced hashes
+    "notion_destinations": {},            # meetings/practice/tasks -> database and field mapping
 }
 
 
@@ -40,7 +44,14 @@ def _valid_history(v: Any) -> list[str]:
     return [str(x) for x in v if isinstance(x, str)][:8]
 
 
+def _valid_dict(v: Any) -> dict:
+    if not isinstance(v, dict):
+        raise ValueError("must be a mapping")
+    return v
+
+
 _VALIDATORS = {
+    "notion_home": _valid_dict, "notion_sections": _valid_dict, "notion_links": _valid_dict, "notion_destinations": _valid_dict,
     "ai_save_dir": str, "groq_api_key": str, "animations": bool, "ai_history": _valid_history,
     "opacity": _valid_opacity, "font_scale": lambda v: min(200, max(60, int(v))),
     "compact_default": bool,

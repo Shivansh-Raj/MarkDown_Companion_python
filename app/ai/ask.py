@@ -27,6 +27,104 @@ def build_system_prompt() -> str:
             "from the document. If you answered that it was not found, omit SOURCES.")
 
 
+# Groq's free tier allows about 8,000 tokens a minute for the default model, answer included. About 14,000 characters of
+# document plus the prompt stays safely under that.
+ASK_BUDGET_CHARS = 14_000
+_CHUNK_MAX = 1_500
+_GAP = "\n\n[…]\n\n"
+_FILLER = set(("the and what this that file with for from about summarise summarize summary tell give list bullet bullets three two four five "
+               "main points who how why when where which does did are was were has have had can could would should into than then them they "
+               "their there here please").split())
+
+
+@dataclass
+class Excerpt:
+    text: str
+    partial: bool
+    sent: int = 1
+    total: int = 1
+
+
+def _chunk_doc(content: str) -> list[tuple[int, int, str]]:
+    """(index, section, text) pieces: split at headings, and long sections at blank lines."""
+    out: list[tuple[int, int, str]] = []
+    section, buf = -1, []
+
+    def push(t: str) -> None:
+        out.append((len(out), section, t))
+
+    def flush() -> None:
+        nonlocal buf
+        text = "\n".join(buf).strip()
+        buf = []
+        if not text:
+            return
+        if len(text) <= _CHUNK_MAX:
+            push(text)
+            return
+        cur = ""
+        for para in re.split(r"\n\s*\n", text):
+            if len(para) > _CHUNK_MAX:
+                rest = para
+                if cur:                                  # whatever came before it (a heading) stays with the first piece
+                    room = max(0, _CHUNK_MAX - len(cur) - 2)
+                    push(f"{cur}\n\n{rest[:room]}")
+                    rest, cur = rest[room:], ""
+                for i in range(0, len(rest), _CHUNK_MAX):
+                    push(rest[i:i + _CHUNK_MAX])
+                continue
+            if cur and len(cur) + len(para) + 2 > _CHUNK_MAX:
+                push(cur)
+                cur = ""
+            cur = f"{cur}\n\n{para}" if cur else para
+        if cur:
+            push(cur)
+    for line in content.split("\n"):
+        if re.match(r"^#{1,6}\s", line):
+            flush()
+            section += 1
+        buf.append(line)
+    flush()
+    return out
+
+
+def excerpt_for_ask(content: str, question: str, budget: int = ASK_BUDGET_CHARS) -> Excerpt:
+    """A file that fits the budget is sent whole. A longer one is cut to the parts most likely to answer the question (by shared
+    words); for a general question ("summarise this") the start of every section is taken instead. Pieces stay in file order."""
+    if len(content) <= budget:
+        return Excerpt(content, False)
+    chunks = _chunk_doc(content)
+    words = sorted({w for w in re.findall(r"[\w]{3,}", question.lower()) if w not in _FILLER})
+    scored = [(c, sum(1 for w in words if w in c[2].lower())) for c in chunks]
+    picked: list[tuple[int, int, str]] = []
+    if words and any(s > 0 for _, s in scored):
+        used = 0
+        for c, s in sorted((x for x in scored if x[1] > 0), key=lambda x: (-x[1], x[0][0])):
+            cost = len(c[2]) + len(_GAP)
+            if used + cost <= budget:
+                picked.append(c)
+                used += cost
+    else:
+        firsts, seen = [], set()
+        for c in chunks:
+            if c[1] not in seen:
+                seen.add(c[1])
+                firsts.append(c)
+        keep = max(1, min(len(firsts), (budget - 100) // (250 + len(_GAP))))
+        chosen = [firsts[int(i * len(firsts) / keep)] for i in range(keep)]
+        per = (budget - 100) // len(chosen) - len(_GAP)
+        for idx, sec, text in chosen:
+            cut = re.sub(r"\s+\S*$", "", text[:per]) if len(text) > per else text
+            picked.append((idx, sec, cut or text[:per]))
+    picked.sort(key=lambda c: c[0])
+    text = ""
+    for i, c in enumerate(picked):
+        text += (("\n\n" if c[0] == picked[i - 1][0] + 1 else _GAP) if i else "") + c[2]
+    if picked and picked[0][0] > 0:
+        text = "[…]\n\n" + text
+    return Excerpt(text[:budget], True, len(picked), len(chunks))
+
+
 def limit_doc(content: str) -> tuple[str, bool]:
     if len(content) <= MAX_ASK_CHARS:
         return content, False

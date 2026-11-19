@@ -67,6 +67,7 @@ class CompanionApp(QObject):
         self.home.settings_requested.connect(self.show_settings)
         self.home.ai_create_requested.connect(self.show_ai_create)
         self.home.voice_requested.connect(self.show_voice)
+        self.home.notion_requested.connect(self.show_notion_open)
         self.home.exit_requested.connect(self.exit)
 
         self.windows.home_requested.connect(self.home.present)
@@ -240,10 +241,30 @@ class CompanionApp(QObject):
     def open_path(self, path: str):
         return self.windows.open_file(path)
 
+    def show_notion_open(self) -> None:
+        """Open a Notion page as a local, linked note: choose it, save it into the AI files folder, open it."""
+        from ..notion.worker import run_async
+        from ..ui.notion_dialogs import PagePickerDialog
+        notion = self.windows.notion
+        if not notion.connected():
+            self.windows.message.emit("Notion is not connected", "Add a connection token in Settings > Notion first.")
+            return
+        dlg = PagePickerDialog(notion, "page", self.home)
+        if not (dlg.exec() and dlg.chosen):
+            return
+        page, folder = dlg.chosen.id, self.windows.ai.save_dir()
+
+        def opened(pulled) -> None:
+            self.open_path(pulled.path)
+            if pulled.unknown_blocks:
+                self.windows.message.emit("Opened from Notion", f"{pulled.unknown_blocks} block(s) could not be shown as Markdown and appear as "
+                                          "<unknown> tags. Leave them as they are.")
+        run_async(self, lambda: notion.pull(page, folder), opened, lambda m: self.windows.message.emit("Could not open the Notion page", m))
+
     def show_settings(self) -> None:
         if self._settings_win is None:
             self._settings_win = SettingsWindow(self.settings, self.shortcut_status or "Shortcuts registered.",
-                                                self.windows.ai)
+                                                self.windows.ai, self.windows.notion)
             self._settings_win.applied.connect(lambda: None)
         self._settings_win.show()
         self._settings_win.raise_()
