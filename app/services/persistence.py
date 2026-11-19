@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -27,10 +28,54 @@ CREATE TABLE IF NOT EXISTS files (
 _STATE_FIELDS = {"x", "y", "w", "h", "compact", "expanded_h", "opacity"}
 
 
+class _Rows:
+    """Query results read while the lock was held, so no cursor is shared between threads."""
+
+    def __init__(self, rows: list):
+        self._rows = rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self) -> list:
+        return list(self._rows)
+
+
+class _SafeConnection:
+    """One SQLite connection shared by the UI thread and the Notion worker threads, used by one thread at a time."""
+
+    def __init__(self, path: str):
+        self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
+
+    def execute(self, sql: str, params=()) -> _Rows:
+        with self._lock:
+            return _Rows(self._conn.execute(sql, params).fetchall())
+
+    def executescript(self, script: str) -> None:
+        with self._lock:
+            self._conn.executescript(script)
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
+    def __enter__(self):
+        self._lock.acquire()
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            return self._conn.__exit__(*exc)
+        finally:
+            self._lock.release()
+
+
 class Database:
     def __init__(self, path: str | Path):
-        self._conn = sqlite3.connect(str(path))
-        self._conn.row_factory = sqlite3.Row
+        self._conn = _SafeConnection(str(path))
         with self._conn:
             self._conn.executescript(_SCHEMA)
 
