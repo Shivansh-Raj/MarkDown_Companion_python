@@ -246,7 +246,7 @@ class AiEditPanel(QWidget):
             self.show_error(f"That is too long for one AI edit ({len(text):,} characters, max {MAX_EDIT_CHARS:,}). "
                             "Pick a smaller section.")
             return
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if not key:
             self.show_error("No Groq API key yet. Add one in Settings (AI) or via New file with AI.")
             return

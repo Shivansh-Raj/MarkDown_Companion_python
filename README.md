@@ -119,3 +119,25 @@ it was added.)
 What you can do with Notion: send a note to a new page, open a Notion page as a linked note (home screen > Notion), refresh from or
 push edits to it (with a preview and a conflict check), export meetings and practice sessions to Notion databases with their
 columns mapped, turn action items into task rows, and see open tasks in the Notion tasks window (home screen > Notion tasks).
+
+## Company AI (instead of Groq)
+
+Settings > **AI provider** switches all chat features (Ask, AI edit, AI create, meeting analyses, coaching, follow-ups, Notion
+Ask) between **Groq** and the **Company AI (gateway)**. Speech-to-text for recordings always uses Groq (the gateway only offers
+chat), so keep a Groq key if you use Voice.
+
+The company gateway works in two steps: V2 sends your client id and secret to `<auth URL>/generate-token`, then sends the chat
+request to `<model URL>/chat/completions` with the token it got back. Replies are not streamed: the whole text appears at once.
+
+Setup:
+1. Put the credentials in a `.env` file next to the app (see `.env.example`): `CLIENT_ID=...` and `CLIENT_SECRET=...`
+   (`client_id: "..."` style lines also work). `.env` is ignored by git. The credentials are read only from this file or from real
+   environment variables, and are never saved in MC's settings.
+2. Enter the two URLs and the model name under Settings > Company AI (or put `DAIA_AUTH_URL`, `DAIA_MODEL_URL`, `DAIA_MODEL` in
+   `.env`). They are not part of the source code, so your company's host names stay out of the repository. The model defaults to
+   `gpt-5.1`.
+3. Press **Test connection**, then Apply.
+
+**Certificates:** by default V2 verifies the server's certificate. If your network re-signs HTTPS traffic and the test fails with a
+certificate message, untick "Verify the server's certificate" for this provider only (less safe).
+

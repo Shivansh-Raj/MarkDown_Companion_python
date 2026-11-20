@@ -33,6 +33,7 @@ class SettingsWindow(QDialog):
         self.setWindowTitle("Markdown Companion V2 - Settings")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         form = QFormLayout()
+        self._form = form
 
         self.primary = QKeySequenceEdit(QKeySequence(settings.get("shortcut_primary")))
         self.home_seq = QKeySequenceEdit(QKeySequence(settings.get("shortcut_home")))
@@ -112,6 +113,34 @@ class SettingsWindow(QDialog):
             self.key_msg.setWordWrap(True)
             self.key_msg.setObjectName("hint")
             form.addRow("", self.key_msg)
+            # Which AI answers chat requests. Speech-to-text (voice) always uses Groq, so keep a Groq key for recordings.
+            self.provider = QComboBox()
+            self.provider.addItem("Groq", "groq")
+            self.provider.addItem("Company AI (gateway)", "gateway")
+            self.provider.setCurrentIndex(max(0, self.provider.findData(settings.get("ai_provider"))))
+            self.provider.currentIndexChanged.connect(self._provider_changed)
+            form.addRow("AI provider:", self.provider)
+            from ..ai import gateway as gw
+            env = gw.load_config(settings)
+            self.gw_auth = QLineEdit(settings.get("gateway_auth_url"))
+            self.gw_auth.setPlaceholderText(env.auth_url or "Authentication URL (…/auth)")
+            self.gw_model_url = QLineEdit(settings.get("gateway_model_url"))
+            self.gw_model_url.setPlaceholderText(env.model_url or "Model URL (…/model-as-a-service)")
+            self.gw_model = QLineEdit(settings.get("gateway_model"))
+            self.gw_model.setPlaceholderText(env.model or gw.DEFAULT_MODEL)
+            self.gw_verify = QCheckBox("Verify the server's certificate (turn off only behind a re-signing company proxy)")
+            self.gw_verify.setChecked(settings.get("gateway_verify_tls"))
+            self.gw_test = QPushButton("Test connection")
+            self.gw_test.clicked.connect(self._test_gateway)
+            self.gw_msg = QLabel("The client id and secret are read from the .env file (CLIENT_ID, CLIENT_SECRET). They are never saved in the "
+                                 "app's settings. Leave a field empty to use DAIA_AUTH_URL, DAIA_MODEL_URL or DAIA_MODEL from .env.")
+            self.gw_msg.setWordWrap(True)
+            self.gw_msg.setObjectName("hint")
+            self.gw_rows = [("Company AI auth URL:", self.gw_auth), ("Company AI model URL:", self.gw_model_url), ("Company AI model:", self.gw_model),
+                            ("", self.gw_verify), ("", self.gw_test), ("", self.gw_msg)]
+            for label, wdg in self.gw_rows:
+                form.addRow(label, wdg)
+            self._provider_changed()
             self.save_dir = QLineEdit(str(ai.save_dir()))
             self.save_dir.setReadOnly(True)
             browse = QPushButton("Change")
@@ -216,6 +245,33 @@ class SettingsWindow(QDialog):
         self._test = w
         w.start()
 
+    def _provider_changed(self) -> None:
+        show = self.provider.currentData() == "gateway"
+        for _label, wdg in self.gw_rows:
+            wdg.setVisible(show)
+        for _label, wdg in self.gw_rows:
+            lab = self._form.labelForField(wdg)
+            if lab is not None:
+                lab.setVisible(show)
+        self.key_msg.setText("Recordings are still turned into text by Groq, so keep a Groq key if you use Voice." if show else "")
+
+    def _gateway_config(self):
+        from ..ai import gateway as gw
+        env = gw.load_config(self.settings)
+        return gw.GatewayConfig(self.gw_auth.text().strip().rstrip("/") or env.auth_url, self.gw_model_url.text().strip().rstrip("/") or env.model_url,
+                                self.gw_model.text().strip() or env.model, env.client_id, env.client_secret, self.gw_verify.isChecked())
+
+    def _test_gateway(self) -> None:
+        from ..ai import gateway as gw
+        from ..notion.worker import run_async
+        cfg = self._gateway_config()
+        self.gw_test.setEnabled(False)
+        self.gw_msg.setText("Testing…")
+        gw.forget_token()
+        run_async(self, lambda: gw.test_connection(cfg),
+                  lambda model: (self.gw_test.setEnabled(True), self.gw_msg.setText(f"Works. Will use {model}.")),
+                  lambda m: (self.gw_test.setEnabled(True), self.gw_msg.setText(m)))
+
     def _test_done(self) -> None:
         w, self._test = self._test, None
         if w is not None:
@@ -260,4 +316,11 @@ class SettingsWindow(QDialog):
         if self.ai is not None:
             s.set("ai_save_dir", self._custom_dir)
             s.set("animations", self.animations.isChecked())
+            s.set("ai_provider", self.provider.currentData())
+            s.set("gateway_auth_url", self.gw_auth.text().strip())
+            s.set("gateway_model_url", self.gw_model_url.text().strip())
+            s.set("gateway_model", self.gw_model.text().strip())
+            s.set("gateway_verify_tls", self.gw_verify.isChecked())
+            from ..ai import gateway as gw
+            gw.forget_token()
         self.applied.emit()

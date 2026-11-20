@@ -113,6 +113,9 @@ def stream_chat(api_key: str, system: str, user: str, on_text: Callable[[str], N
                 cancel: threading.Event | None = None) -> str:
     """Streams a completion, calling on_text(full_text_so_far). Raises Cancelled if `cancel` is set."""
     cancel = cancel or threading.Event()
+    if api_key == "company-gateway":                     # the Settings toggle: use the company AI instead of Groq
+        from . import gateway
+        return gateway.stream_chat(system, user, on_text, cancel)
     model = resolve_model(api_key)
     body = {"model": model, "stream": True, "temperature": 0.3,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}

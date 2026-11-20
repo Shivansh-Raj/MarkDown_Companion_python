@@ -159,7 +159,7 @@ class AiCreateWindow(EdgeResize, QDialog):
         self._cancel_worker()
         self.show_error()
         self.cat.stop()
-        if self.ai.api_key():
+        if self.ai.chat_key():
             self.stack.setCurrentIndex(PAGE_PROMPT)
             self.prompt.setFocus()
         else:
@@ -191,7 +191,7 @@ class AiCreateWindow(EdgeResize, QDialog):
 
     def generate(self) -> None:
         prompt = self.prompt.toPlainText().strip()
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if not prompt or not key or self._worker is not None:
             return
         self.show_error()

@@ -251,7 +251,7 @@ class AskPanel(QWidget):
         if not q or self.busy:
             return
         self.show_error()
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if not key:
             self.show_error("No Groq API key yet. Open New with AI from the home screen and set it with the Key button.")
             return

@@ -113,7 +113,7 @@ def panel(qapp, monkeypatch, reply='Friday.\n\nSOURCES:\n- "Ship Friday."'):
         def deleteLater(self): pass
     monkeypatch.setattr(ap, "StreamWorker", W)
     notion = FakeNotion()
-    ai = SimpleNamespace(api_key=lambda: "k", theme_name=lambda: "retro", notion=notion)
+    ai = SimpleNamespace(api_key=lambda: "k", chat_key=lambda: "k", theme_name=lambda: "retro", notion=notion)
     return AskPanel(ai), notion, sent
 
 

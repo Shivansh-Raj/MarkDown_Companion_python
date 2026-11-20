@@ -27,6 +27,11 @@ DEFAULTS: dict[str, Any] = {
     "ai_history": [],                     # recent AI-edit instructions, newest first
     "animations": True,                   # typing cat, diff reveal
     "groq_api_key": "",                   # only used when the OS keychain is unavailable
+    "ai_provider": "groq",                # "groq" or "gateway" (the company AI); speech-to-text always uses Groq
+    "gateway_auth_url": "",               # base URL of the company AI's authentication service ("" = DAIA_AUTH_URL from .env)
+    "gateway_model_url": "",              # base URL of its model service ("" = DAIA_MODEL_URL from .env)
+    "gateway_model": "",                  # model name ("" = DAIA_MODEL from .env, else gpt-5.1)
+    "gateway_verify_tls": True,           # check the server's certificate (turn off only behind a re-signing proxy)
     "notion_home": {},                    # the Notion page everything MC creates goes into
     "notion_sections": {},                # section key -> page id under the home page
     "notion_links": {},                   # local file key -> linked Notion page and last-synced hashes
@@ -51,6 +56,8 @@ def _valid_dict(v: Any) -> dict:
 
 
 _VALIDATORS = {
+    "ai_provider": lambda v: v if v in ("groq", "gateway") else (_ for _ in ()).throw(ValueError("provider")),
+    "gateway_auth_url": str, "gateway_model_url": str, "gateway_model": str, "gateway_verify_tls": bool,
     "notion_home": _valid_dict, "notion_sections": _valid_dict, "notion_links": _valid_dict, "notion_destinations": _valid_dict,
     "ai_save_dir": str, "groq_api_key": str, "animations": bool, "ai_history": _valid_history,
     "opacity": _valid_opacity, "font_scale": lambda v: min(200, max(60, int(v))),

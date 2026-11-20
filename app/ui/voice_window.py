@@ -396,7 +396,7 @@ class VoiceWindow(QWidget):
 
     def _make_note(self) -> None:
         text = transcript_text(self.svc.chunks)
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if not text or self._note_worker is not None:
             return
         if not key:

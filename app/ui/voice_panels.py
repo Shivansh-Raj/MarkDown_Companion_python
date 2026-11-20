@@ -506,7 +506,7 @@ class AnalysisPanel(QWidget):
             self.refresh()
             return
         kind = self._todo.pop(0)
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if not key:
             self._todo.clear()
             self.show_error("No Groq API key. Add one in Settings or under New with AI.")
@@ -815,7 +815,7 @@ class PracticePanel(QWidget):
             self.refresh()
             return
         kind = self._todo.pop(0)
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if not key:
             self._todo.clear()
             self.show_error("No Groq API key. Add one in Settings or under New with AI.")
@@ -1128,7 +1128,7 @@ class FollowUpPanel(QWidget):
         if self._busy or not self.ready or self.svc.meta is None:
             return
         self.show_error()
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if not key:
             self.show_error("No Groq API key. Add one in Settings or under New with AI.")
             return
@@ -1332,7 +1332,7 @@ class QuestionStrip(QWidget):
 
     def _generate(self, rethink: bool) -> None:
         text = transcript_text(self.svc.chunks)
-        key = self.ai.api_key()
+        key = self.ai.chat_key()
         if self._worker is not None or not key or not word_count(text):
             return
         self._rethink = rethink

@@ -25,6 +25,17 @@ def _keyring():
 class AiServices:
     def __init__(self, settings):
         self.settings = settings
+        from . import gateway
+        gateway.configure(lambda: gateway.load_config(settings))
+
+    # Which AI answers chat requests: Groq, or the company gateway. Speech-to-text always uses Groq's key (see api_key).
+    def provider(self) -> str:
+        return self.settings.get("ai_provider")
+
+    def chat_key(self) -> str:
+        """What to hand a chat worker: the Groq key, or a stand-in meaning "use the company AI" (its own checks give clear errors)."""
+        from .gateway import GATEWAY_KEY
+        return GATEWAY_KEY if self.provider() == "gateway" else self.api_key()
 
     # API key: OS keychain when available, otherwise the local settings database -------------
     def api_key(self) -> str:
